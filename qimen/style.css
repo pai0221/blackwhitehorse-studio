@@ -1,0 +1,13 @@
+body { font-family: "Microsoft JhengHei", sans-serif; margin:0; background:#f5f5f5; }
+header { background:#222; color:#fff; padding:14px 18px; }
+h1 { margin:0 0 8px; font-size:20px; }
+.toolbar { display:flex; gap:10px; align-items:center; }
+button { padding:8px 12px; border:0; border-radius:6px; background:#0b57d0; color:#fff; }
+button#undoBtn { background:#555; }
+#hint { margin-left:10px; color:#ffd369; }
+main { display:flex; justify-content:center; padding:18px; }
+#board { background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,.08); width:min(96vw,600px); height:auto; }
+.node-label { font-size:14px; fill:#222; text-anchor:middle; }
+.slot { fill:#eee; stroke:#bbb; }
+.bead { cursor:pointer; }
+.bead.selected { stroke:#ff9800; stroke-width:4; }
