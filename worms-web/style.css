@@ -8,7 +8,3 @@ html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,Sego
 #help ul{margin:0;padding-left:18px}
 .hidden{display:none}
 #overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;text-align:center;font-size:28px}
-.button{background:#3aa0ff;border:none;color:#fff;padding:8px 12px;border-radius:6px;cursor:pointer}
-.healthbar{height:6px;background:#444;border-radius:4px;overflow:hidden}
-.healthbar>div{height:100%;background:#4caf50}
-.badge{display:inline-block;padding:.1em .4em;border-radius:.5em;background:#333;margin-left:.25em}
