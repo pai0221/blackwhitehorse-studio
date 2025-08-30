@@ -1,6 +1,6 @@
-// Worms-like Canvas game (Charge-to-shoot + Ground friction + Blue Team AI)
-// Author: ChatGPT (GPT-5 Thinking)
+// Worms-like Canvas game (Charge-to-shoot + Friction + Improved Blue Team AI + Alternating turns)
 
+// ===== Constants =====
 const WIDTH = 1280;
 const HEIGHT = 720;
 const GRAVITY = 900; // px/s^2
@@ -19,12 +19,12 @@ const GROUND_FRICTION = 12;
 const AIR_DRAG = 0.8;
 const SLEEP_THRESHOLD = 2.0;
 
-// Utils
+// ===== Utils =====
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 const randRange=(a,b)=>a+Math.random()*(b-a);
 const deg2rad=d=>d*Math.PI/180;
 
-// DOM
+// ===== DOM =====
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const turnInfoEl = document.getElementById('turnInfo');
@@ -34,7 +34,7 @@ const powerInfoEl = document.getElementById('powerInfo');
 const windValueEl = document.getElementById('windValue');
 const windArrowEl = document.getElementById('windArrow');
 
-// ===== Terrain =====
+// ================= 地形 =================
 class Terrain{
   constructor(w,h){
     this.w=w;this.h=h;
@@ -73,7 +73,7 @@ class Terrain{
   drawTo(destCtx){destCtx.drawImage(this.canvas,0,0);}
 }
 
-// ===== Worm =====
+// ================= 蟲（Worm） =================
 class Worm{
   constructor(x,y,color,teamId,name){
     this.x=x;this.y=y;
@@ -88,7 +88,7 @@ class Worm{
     this.aimAngle=-30;
     this.power=CHARGE_MIN;
     this.onGround=false;
-    this.isAI=false; // AI flag
+    this.isAI=false; // Blue team will be AI
   }
   applyDamage(amount){
     if(!this.alive)return;
@@ -152,7 +152,7 @@ class Worm{
     ctx.fillStyle='#222';
     ctx.beginPath();ctx.arc(this.x-3,this.y-3,1,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(this.x+3,this.y-3,1,0,Math.PI*2);ctx.fill();
-    // aim
+    // aim line
     const ang=deg2rad(this.aimAngle);
     const dir=this.facing;
     const ax=this.x+Math.cos(ang)*dir*24;
@@ -170,13 +170,12 @@ class Worm{
   }
 }
 
-// ===== Projectile =====
+// ================= 飛彈 / 手榴彈 =================
 class Projectile{
   constructor(x,y,vx,vy,type,wind){
-    this.x=x;this.y=y;
-    this.vx=vx;this.vy=vy;
-    this.type=type;this.alive=true;
-    this.radius=4;this.wind=wind;
+    this.x=x;this.y=y;this.vx=vx;this.vy=vy;
+    this.type=type;this.alive=true;this.radius=4;
+    this.wind=wind;
     if(type==='bazooka'){this.explodeRadius=34;this.maxDamage=50;this.fuse=null;this.bouncy=false;}
     else if(type==='grenade'){this.explodeRadius=38;this.maxDamage=60;this.fuse=3.0;this.bouncy=true;}
     else {this.explodeRadius=52;this.maxDamage=85;this.fuse=4.0;this.bouncy=true;}
@@ -235,7 +234,7 @@ class Projectile{
   }
 }
 
-// ===== Explosion FX =====
+// ================= 爆炸特效 =================
 class ExplosionFX{
   constructor(x,y,r){this.x=x;this.y=y;this.r=r;this.t=0;this.duration=0.5;}
   update(dt){this.t+=dt;}
@@ -254,7 +253,7 @@ class ExplosionFX{
   get alive(){return this.t<this.duration;}
 }
 
-// ===== Wind =====
+// ================= 風 =================
 class Wind{
   constructor(){this.value=0;}
   randomize(){this.value=randRange(-1,1);}
@@ -264,21 +263,28 @@ class Wind{
   }
 }
 
-// ===== Game (with AI) =====
+// ================= 遊戲控制（含 AI 與交替回合） =================
 class Game{
   constructor(){
     this.terrain=new Terrain(WIDTH,HEIGHT);
     this.wind=new Wind();
     this.worms=[];
     this.projectiles=[];
-    this.turnIndex=0;
     this.turnTimer=TURN_TIME;
     this.movementBudget=WALK_DIST_PER_TURN;
-    this.state='playing'; // 'playing' | 'projectile' | 'waitingNext' | 'gameover'
-    // charging
+    this.state='playing';
+
+    // 蓄力狀態（玩家回合才會用到）
     this.isCharging=false; this.chargeT=0; this.chargeHold=0;
     this.activeWeapon='bazooka';
     this.keys=new Set();
+
+    // —— 交替回合（紅→藍→紅→藍）——
+    this.turnTeam = 0;                        // 0=紅隊先手
+    this.teamOrder = {0: [], 1: []};          // 各隊成員索引列表
+    this.teamCursor = {0: 0, 1: 0};           // 隊內輪替游標
+    this.activeIdx = 0;                       // 目前行動中的 worm 索引
+
     this.initTeams();
     this.nextTurn(true);
     this.bindInputs();
@@ -292,8 +298,9 @@ class Game{
       const teamId=(i<2?0:1);
       const color=(teamId===0?(i===0?'#ff8fa3':'#ff5c8a'):(i===2?'#6ec1ff':'#4ea8de'));
       const w=new Worm(x,y-20,color,teamId,`W${i+1}`);
-      if(teamId===1) w.isAI = true; // Blue team = AI
+      if(teamId===1) w.isAI = true; // 藍隊交給 AI
       this.worms.push(w);
+      this.teamOrder[teamId].push(this.worms.length-1);
     }
   }
   spawnYFromX(x){return (this.terrain.heightmap[x|0]|0)-10;}
@@ -301,20 +308,27 @@ class Game{
   bindInputs(){
     window.addEventListener('keydown',(e)=>{
       if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','Enter','1','2','3','r','R'].includes(e.key)) e.preventDefault();
-      if(this.keys.has(e.key) && e.key===' ') return;
+      if(this.keys.has(e.key) && e.key===' ') return; // 避免長按重複 keydown
       this.keys.add(e.key);
+
       if(e.key==='1') this.activeWeapon='bazooka';
       if(e.key==='2') this.activeWeapon='grenade';
       if(e.key==='3') this.activeWeapon='hhg';
+
       if((e.key==='r'||e.key==='R') && this.state!=='projectile') this.resetTerrainAndPositions();
       if(e.key==='Enter' && this.state==='playing' && !this.isCharging) this.endTurn();
+
+      // 只有玩家（非 AI）才能蓄力
       if(e.key===' ' && this.state==='playing' && !this.isCharging){
         const aw=this.activeWorm;
-        if(aw && !aw.isAI){ // 玩家回合才允許蓄力
-          this.isCharging=true; this.chargeT=0; this.chargeHold=0;
+        if(aw && !aw.isAI){
+          this.isCharging=true;
+          this.chargeT=0;
+          this.chargeHold=0;
         }
       }
     });
+
     window.addEventListener('keyup',(e)=>{
       if(e.key===' ' && this.isCharging){
         const w=this.activeWorm;
@@ -340,29 +354,61 @@ class Game{
   }
 
   get activeWorm(){
-    for(let i=0;i<this.worms.length;i++){
-      const w=this.worms[(this.turnIndex+i)%this.worms.length];
-      if(w.alive) return w;
-    }
-    return null;
+    const w=this.worms[this.activeIdx];
+    return (w && w.alive) ? w : null;
   }
 
   nextTurn(first=false){
+    // 切換隊伍：紅(0)→藍(1)→紅(0)...
+    if(!first) this.turnTeam = 1 - this.turnTeam;
+
+    const order = this.teamOrder[this.turnTeam];
+    if(!order.length){ this.state='gameover'; return; }
+
+    // 從隊內游標開始尋找下一個活著的 worm
+    let picked = null;
+    let pickedIndexInOrder = -1;
+    const start = this.teamCursor[this.turnTeam];
+    for(let i=0;i<order.length;i++){
+      const idxInOrder = (start + i) % order.length;
+      const idx = order[idxInOrder];
+      if(this.worms[idx] && this.worms[idx].alive){
+        picked = idx;
+        pickedIndexInOrder = idxInOrder;
+        break;
+      }
+    }
+
+    // 該隊全滅？直接判勝負
+    if(picked == null){
+      const otherTeam = 1 - this.turnTeam;
+      const otherAlive = this.teamOrder[otherTeam].some(i=>this.worms[i].alive);
+      this.state = 'gameover';
+      setTimeout(()=>{
+        showOverlay(otherAlive ? (otherTeam===0?'紅隊勝利！':'藍隊勝利！') : '平局！');
+      }, 600);
+      return;
+    }
+
+    // 設定下一個起點（隊內輪替）
+    this.teamCursor[this.turnTeam] = (pickedIndexInOrder + 1) % order.length;
+    this.activeIdx = picked;
+
+    // 回合初始化
     this.wind.randomize();
-    this.movementBudget=WALK_DIST_PER_TURN;
-    this.turnTimer=TURN_TIME;
-    this.state='playing';
-    if(!first) this.turnIndex=(this.turnIndex+1)%this.worms.length;
-    const w=this.activeWorm;
-    if(!w){this.state='gameover';return;}
-    const enemy=this.worms.find(x=>x.alive && x.teamId!==w.teamId);
-    if(enemy) w.facing=(enemy.x>=w.x?1:-1);
+    this.movementBudget = WALK_DIST_PER_TURN;
+    this.turnTimer = TURN_TIME;
+    this.state = 'playing';
+
+    const w = this.activeWorm;
+    // 面向最近敵人
+    const enemy = this.worms.find(x=>x.alive && x.teamId !== w.teamId);
+    if(enemy) w.facing = (enemy.x >= w.x ? 1 : -1);
+
     this.updateHUD();
 
-    // If AI's turn, schedule action
-    if (w && w.isAI) {
-      setTimeout(()=>this.aiTakeTurn(), 400);
-    }
+    // AI 回合：稍等一下讓 HUD 更新再自動行動
+    if (w && w.isAI) setTimeout(()=>this.aiTakeTurn(), 400);
   }
 
   updateHUD(){
@@ -389,25 +435,27 @@ class Game{
     this.state='projectile';
   }
 
-  endTurn(){ this.turnIndex=(this.turnIndex+1)%this.worms.length; this.nextTurn(); }
+  endTurn(){ this.nextTurn(false); }
 
   update(dt){
     if(this.state==='gameover') return;
+
     const aw=this.activeWorm;
     if(this.state==='playing' && aw && aw.alive){
       this.turnTimer-=dt;
       if(this.turnTimer<=0){this.endTurn();return;}
-      // Aiming (player only)
+
+      // 玩家控制（AI 不吃鍵盤）
       if(!aw.isAI){
         if(this.keys.has('ArrowUp'))  aw.aimAngle=Math.max(-85,aw.aimAngle-60*dt);
         if(this.keys.has('ArrowDown'))aw.aimAngle=Math.min( 85,aw.aimAngle+60*dt);
-        // Charging
+
         if(this.isCharging){
           this.chargeHold+=dt;
           const t=Math.max(0,Math.min(1,this.chargeHold/CHARGE_TIME));
-          this.chargeT=1-(1-t)*(1-t);
+          this.chargeT=1-(1-t)*(1-t); // ease-out
         }
-        // Movement
+
         let moveDir=0;
         if(this.keys.has('ArrowLeft'))  moveDir-=1;
         if(this.keys.has('ArrowRight')) moveDir+=1;
@@ -424,17 +472,20 @@ class Game{
           if(!blocked){aw.x=nx;aw.y=ny;this.movementBudget-=spend;}
         }
       }
+
       this.updateHUD();
     }
 
-    // physics
+    // 物理更新
     for(const w of this.worms) w.update(dt,this.terrain);
     for(const p of this.projectiles) p.update(dt,this.terrain,this.worms);
     for(const fx of effects) fx.update(dt);
+
+    // 清理
     this.projectiles=this.projectiles.filter(p=>p.alive);
     effects=effects.filter(e=>e.alive);
 
-    // victory
+    // 勝負
     const aliveTeams=new Set(this.worms.filter(w=>w.alive).map(w=>w.teamId));
     if(aliveTeams.size<=1){
       this.state='gameover';
@@ -442,34 +493,35 @@ class Game{
         showOverlay(aliveTeams.size===0?'平局！':(aliveTeams.has(0)?'紅隊勝利！':'藍隊勝利！')+'<br><br>按 R 重生地形繼續玩，或重新整理頁面。');
       },600);
     }
-    // end of shot -> next turn
+
+    // 射擊階段結束 -> 延遲換手
     if(this.state==='projectile' && this.projectiles.length===0){
       this.state='waitingNext';
-      setTimeout(()=>this.nextTurn(),AFTER_SHOT_DELAY);
+      setTimeout(()=>this.nextTurn(false),AFTER_SHOT_DELAY);
     }
   }
 
   draw(ctx){
-    // background
+    // 背景
     const sky=ctx.createLinearGradient(0,0,0,HEIGHT);
     sky.addColorStop(0,'#2b2d42'); sky.addColorStop(1,'#14213d');
     ctx.fillStyle=sky; ctx.fillRect(0,0,WIDTH,HEIGHT);
-    // mountains
+    // 遠山
     ctx.save();ctx.globalAlpha=0.25;ctx.fillStyle='#0e1726';
     for(let i=0;i<8;i++){
       const bx=i*180+60, by=HEIGHT*0.72+((i%2)*20);
       ctx.beginPath();ctx.moveTo(bx-120,by);ctx.lineTo(bx,by-140);ctx.lineTo(bx+140,by);ctx.closePath();ctx.fill();
     }
     ctx.restore();
-    // water
+    // 水面
     ctx.fillStyle='#31587a';ctx.fillRect(0,WATER_LEVEL,WIDTH,HEIGHT-WATER_LEVEL);
-    // world
+    // 地形/物件
     this.terrain.drawTo(ctx);
     for(const p of this.projectiles) p.draw(ctx);
     for(const w of this.worms) w.draw(ctx);
     for(const fx of effects) fx.draw(ctx);
 
-    // movement bar
+    // 移動距離條
     const aw=this.activeWorm;
     if(aw && this.state!=='gameover'){
       const mm=this.movementBudget/WALK_DIST_PER_TURN;
@@ -482,7 +534,7 @@ class Game{
       ctx.restore();
     }
 
-    // charge bar (player only)
+    // 蓄力條（只在玩家蓄力時顯示）
     if(this.state==='playing' && this.isCharging && aw && !aw.isAI){
       const w=340,h=18; const x=(WIDTH-w)/2,y=HEIGHT-48; const t=this.chargeT;
       ctx.save();
@@ -497,67 +549,98 @@ class Game{
     }
   }
 
-  // ===== AI logic =====
+  // ======== AI：避免自爆 + 更會瞄 ========
   aiTakeTurn(){
     const w=this.activeWorm;
     if(!w || !w.isAI || this.state!=='playing') return;
-    // target nearest enemy
+
+    // 目標：最近的敵人
     const targets=this.worms.filter(x=>x.alive && x.teamId!==w.teamId);
     if(!targets.length) return;
     targets.sort((a,b)=>Math.hypot(a.x-w.x,a.y-w.y)-Math.hypot(b.x-w.x,b.y-w.y));
     const target=targets[0];
+
+    // 面向目標；用火箭筒
     w.facing=(target.x>=w.x?1:-1);
     this.activeWeapon='bazooka';
-    // grid search
-    let best={dist:Infinity, ang:-30, pow:60};
-    for(let ang=-80; ang<=80; ang+=5){
-      for(let pow=30; pow<=100; pow+=10){
-        const sim=this.simulateShot(w.x,w.y,ang,w.facing,pow,'bazooka',target);
-        if(sim.dist<best.dist) best={dist:sim.dist, ang, pow};
-        if(best.dist<14) break;
+
+    // 參數
+    const SAFE_DIST = 80;       // 第一落點離自己至少要這麼遠
+    const PENALTY_NEAR = 10000; // 自爆級懲罰
+    const PENALTY_OOB  = 400;   // 飛出邊界懲罰
+    const ANG_STEP = 4;         // 角度步進（小=更準）
+    const POW_STEP = 6;         // 威力步進（小=更準）
+
+    let best={score:Infinity, ang:-30, pow:60};
+
+    for(let ang=-80; ang<=80; ang+=ANG_STEP){
+      for(let pow=30; pow<=100; pow+=POW_STEP){
+        const sim=this.simulateShot(w.x,w.y,ang,w.facing,pow,target);
+        let score=sim.minDistToTarget;
+        if(sim.firstHitDistFromShooter < SAFE_DIST) score += PENALTY_NEAR;
+        if(sim.outOfBounds) score += PENALTY_OOB;
+        if(score<best.score) best={score, ang, pow};
+        if(best.score<8) break; // 已經很接近
       }
-      if(best.dist<14) break;
+      if(best.score<8) break;
     }
-    if(!isFinite(best.dist) || best.dist>120){ best.ang=w.facing*45; best.pow=80; }
+
+    if(!isFinite(best.score) || best.score>600){
+      best.ang = w.facing*45; best.pow = 80; // 保底解
+    }
+
     w.aimAngle=best.ang; this.updateHUD();
-    setTimeout(()=>this.tryFireWithPower(best.pow), 600);
+    setTimeout(()=>this.tryFireWithPower(best.pow), 550);
   }
 
-  simulateShot(x0,y0,angleDeg,facing,power,weapon,target){
+  // 回傳：與目標最近距離、第一個碰撞點離射手距離、是否出界
+  simulateShot(x0,y0,angleDeg,facing,power,target){
     const muzzleV=clamp(power,CHARGE_MIN,CHARGE_MAX)*6;
     const ang=deg2rad(angleDeg)*facing;
     let vx=Math.cos(ang)*muzzleV;
     let vy=Math.sin(ang)*muzzleV;
     let x=x0 + Math.cos(ang)*16;
     let y=y0 + Math.sin(ang)*16;
-    let minDist=Infinity;
-    const dt=0.02, TMAX=3.5;
+
+    let minDistToTarget=Infinity;
+    let firstHitDistFromShooter=Infinity;
+    let outOfBounds=false;
+
+    const dt=0.02, TMAX=3.8;
     for(let t=0;t<TMAX;t+=dt){
       vx += this.wind.value * 40 * dt;
       vy += GRAVITY * dt;
       x += vx * dt; y += vy * dt;
-      if(x<-50||x>WIDTH+50||y>HEIGHT+100) break;
+
+      if(x < -80 || x > WIDTH + 80 || y > HEIGHT + 120) { outOfBounds=true; break; }
+
       if(this.terrain.isSolid(x|0,y|0)){
-        const d=Math.hypot(target.x-x, target.y-y);
-        if(d<minDist) minDist=d; break;
+        const dxs = x - x0, dys = y - y0;
+        firstHitDistFromShooter = Math.hypot(dxs, dys);
+        const dHit = Math.hypot(target.x - x, target.y - y);
+        if(dHit < minDistToTarget) minDistToTarget = dHit;
+        break;
       }
-      const d=Math.hypot(target.x-x, target.y-y);
-      if(d<minDist) minDist=d;
-      if(d<10) break;
+
+      const d = Math.hypot(target.x - x, target.y - y);
+      if(d < minDistToTarget) minDistToTarget = d;
+      if(d < 9) break;
     }
-    return {dist:minDist};
+    return {minDistToTarget, firstHitDistFromShooter, outOfBounds};
   }
 }
 
-// ===== Global loop =====
+// ================= 全域：主迴圈 / 尺寸自適應 =================
 let game=null;
 let effects=[];
+
 function showOverlay(html){
   const ov=document.getElementById('overlay');
   ov.innerHTML=`<div>${html}</div>`;
   ov.classList.remove('hidden');
   setTimeout(()=>ov.classList.add('hidden'),2800);
 }
+
 function start(){
   game=new Game();
   let last=performance.now();
@@ -571,7 +654,8 @@ function start(){
   requestAnimationFrame(frame);
 }
 start();
-// Fit
+
+// Fit to window
 function resizeCanvasToFit(){
   const wrapW=window.innerWidth, wrapH=window.innerHeight;
   const scale=Math.min(wrapW/WIDTH, wrapH/HEIGHT);
