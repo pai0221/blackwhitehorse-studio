@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>百戰天蟲（Worms）— Canvas Web 版</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="hud">
+    <div id="leftHUD">
+      <span id="turnInfo">回合：—</span>
+      <span id="weaponInfo">武器：—</span>
+      <span id="angleInfo">角度：—</span>
+      <span id="powerInfo">威力：—</span>
+    </div>
+    <div id="rightHUD">
+      風向：<span id="windValue">0</span>
+      <span id="windArrow">⇆</span>
+    </div>
+  </div>
+
+  <canvas id="game" width="1280" height="720"></canvas>
+
+  <div id="help">
+    <h2>操作說明</h2>
+    <ul>
+      <li>移動：← →（每回合有限距離）</li>
+      <li>瞄準角度：↑ ↓</li>
+      <li>威力： [  /  ] </li>
+      <li>選武器： 1 = 火箭筒、2 = 手榴彈、3 = 神聖手榴彈</li>
+      <li>發射：空白鍵（Space）</li>
+      <li>跳過回合：Enter　｜　重生地形：R</li>
+    </ul>
+  </div>
+
+  <div id="overlay" class="hidden"></div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
