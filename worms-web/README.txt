@@ -1,32 +1,21 @@
-# 百戰天蟲（Worms）風格：Canvas 網頁遊戲
+# Worms-like Web Game (with AI)
+- Charge to shoot (hold Space, release to fire)
+- Destructible random terrain
+- Wind affects trajectory
+- Ground friction & air drag so worms stop sliding after blast
+- Blue team is AI: it searches angle/power to aim the nearest enemy and fires automatically
 
-這是無框架的原生 HTML/CSS/JS 小專案，打開 `index.html` 就能玩。
-功能包含：
-- 亂數生成地形（可破壞，爆炸時會挖洞）
-- 兩隊各 2 隻「蟲」，回合制行動
-- 風向系統影響拋物線
-- 武器：火箭筒（即爆）、手榴彈（3秒引信彈跳）、神聖手榴彈（4秒大爆）
-- 傷害、擊退、水面判定、勝負判定
+## Controls
+- Move: Left/Right (limited distance per turn)
+- Aim: Up/Down
+- Charge & Fire: Hold Space to charge, release to fire (player turns only)
+- Weapons: 1=Bazooka, 2=Grenade, 3=Holy Hand Grenade
+- Skip turn: Enter
+- Regenerate terrain: R
 
-## 操作
-- 移動：← →（每回合有限距離）
-- 瞄準角度：↑ ↓
-- 威力：[  /  ]
-- 選武器：1/2/3
-- 發射：空白鍵（Space）
-- 跳過回合：Enter
-- 重生地形（保留血量位置重置）：R
+## How to run
+Open with a local web server (recommended):
+- Python: `python -m http.server 8000` then visit http://localhost:8000/
+- VSCode: install "Live Server" and click Go Live
 
-## 部署
-- 直接雙擊 `index.html`（最佳：在任何靜態伺服器上開啟，如 GitHub Pages/本機簡易 http 伺服器）。
-- 若用 GitHub Pages：把整個資料夾上傳成 repo，`Settings -> Pages` 選擇 main / root 即可。
-
-## 客製化方向（給開發者）
-- `WIDTH/HEIGHT` 可改解析度。
-- `WATER_LEVEL` 可改水位。
-- `WALK_DIST_PER_TURN` 可改每回合可走距離。
-- 新武器：仿照 `Projectile` 類別新增 `type` 分支（設定爆炸半徑/引信/最大傷害/彈性）。
-- 地形生成：在 `Terrain.generate()` 調整正弦與噪聲組合。
-- 可加入 AI：選擇最近敵人，窮舉角度/威力估算命中。
-
-> 注意：這是教學級原型，已盡量在效能與可讀性間折衷；如要上線，建議進一步優化碰撞與繪圖。
+Opening via file:// may block module scripts.
