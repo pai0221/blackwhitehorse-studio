@@ -942,35 +942,29 @@ function resolveAltarLinkage(placedSlotIdx, placedElem) {
   const effectCount = G.phoenixActive ? 2 : 1;
   const phoenixLog = G.phoenixActive ? '(朱雀加成x2)' : '';
 
-  // 【新增】檢查土靈結界是否開啟
-  const earthProtected = isEarthBarrierActive();
-  if (earthProtected) {
-    addLog("🛡️ 土靈結界生效：本次召喚免疫所有生剋衝擊！", "good");
-  }
+  // 【修復】移除原本在這裡阻擋玩家生剋的 earthProtected 判定
 
   adjacencies.forEach(adjSlotIdx => {
     const adjCard = G.altar[adjSlotIdx];
     if (!adjCard) return;
     const adjElem = adjCard.elem;
 
-    // 如果土靈結界沒開，才把生剋動作加入佇列
-    if (!earthProtected) {
-      // 新牌對舊牌
-      if (GENERATES[placedElem] === adjElem) {
-        for(let i=0; i<effectCount; i++) G.pendingEffects.push({ type: 'inward', elem: adjElem, desc: `相生${phoenixLog}` });
-      } else if (RESTRAINS[placedElem] === adjElem) {
-        for(let i=0; i<effectCount; i++) G.pendingEffects.push({ type: 'outward', elem: adjElem, desc: `相剋${phoenixLog}` });
-      } 
-      
-      // 舊牌對新牌
-      if (GENERATES[adjElem] === placedElem) {
-        for(let i=0; i<effectCount; i++) G.pendingEffects.push({ type: 'inward', elem: placedElem, desc: `相生${phoenixLog}` });
-      } else if (RESTRAINS[adjElem] === placedElem) {
-        for(let i=0; i<effectCount; i++) G.pendingEffects.push({ type: 'outward', elem: placedElem, desc: `相剋${phoenixLog}` });
-      }
+    // 玩家的生剋陣法流轉，永遠不受干擾！
+    // 新牌對舊牌
+    if (GENERATES[placedElem] === adjElem) {
+      for(let i=0; i<effectCount; i++) G.pendingEffects.push({ type: 'inward', elem: adjElem, desc: `相生${phoenixLog}` });
+    } else if (RESTRAINS[placedElem] === adjElem) {
+      for(let i=0; i<effectCount; i++) G.pendingEffects.push({ type: 'outward', elem: adjElem, desc: `相剋${phoenixLog}` });
+    } 
+    
+    // 舊牌對新牌
+    if (GENERATES[adjElem] === placedElem) {
+      for(let i=0; i<effectCount; i++) G.pendingEffects.push({ type: 'inward', elem: placedElem, desc: `相生${phoenixLog}` });
+    } else if (RESTRAINS[adjElem] === placedElem) {
+      for(let i=0; i<effectCount; i++) G.pendingEffects.push({ type: 'outward', elem: placedElem, desc: `相剋${phoenixLog}` });
     }
     
-   // ─── 【全新防溢出精煉機制】 ───
+    // 防溢出精煉機制
     if (placedElem === adjElem) {
       const eIdx = ELEM.indexOf(adjElem);
       const oldLevel = G.refinery[eIdx];
@@ -1144,10 +1138,10 @@ function moveOrbOutwardSpecific(elemIdx, fromLayer, targetOrb) {
   return true;
 }
 
-// ─── 天劫 AI 核心 ───
+// ─── 替換：天劫運作引擎 ───
 function runTribulation() {
   setPhase('tribulation');
-  G.lastTribLogs = []; // 清空並準備記錄本次天劫的動作
+  G.lastTribLogs = []; 
   const tLog = (msg) => { G.lastTribLogs.push(msg); };
 
   addLog(`☁️ 【天劫回合】天劫開始運作，詳情請見右側天劫資訊欄。`, 'bad');
@@ -1178,6 +1172,7 @@ function runTribulation() {
     tLog(`劫變(生)：${ELEM_CHAR[bElem]}屬 惡化生成新劫珠`);
   }
 
+  // ─── 劫變(剋) 判定 ───
   let innermostLayer = -1;
   for (let li = 0; li <= 3; li++) {
     if (G.board[cIdx][li].some(o => o.owner === 'player')) { innermostLayer = li; break; }
@@ -1188,16 +1183,23 @@ function runTribulation() {
     tLog(`劫變(剋)：${ELEM_CHAR[cElem]}屬 代償生成新劫珠`);
     finishTribulation();
   } else {
-    const playerOrbs = G.board[cIdx][innermostLayer].filter(o => o.owner === 'player');
-    if (playerOrbs.length > 1) {
-      G.tribPending = { action: 'restrain', elem: cElem, layer: innermostLayer };
-      tLog(`劫變(剋)：等待玩家抉擇承受衝擊的珠子`);
-      addLog(`⚠️ 天劫衝擊！${ELEM_CHAR[cElem]}屬「${LAYER_NAMES[innermostLayer]}」有多顆珠子，請點擊你要承受衝擊（向外退）的那顆！`, 'warn');
-      renderAll();
+    // 【核心修復：天劫攻擊時，檢查我方土靈結界是否開啟】
+    if (typeof isEarthBarrierActive === 'function' && isEarthBarrierActive()) {
+      tLog(`🛡️ 結界發威：成功化解天劫對 ${ELEM_CHAR[cElem]}屬 的相剋衝擊！`);
+      addLog(`🛡️ 土靈結界生效！完美抵擋了天劫的相剋外推。`, 'good');
+      finishTribulation(); // 直接結束天劫，玩家珠子安然無恙！
     } else {
-      tLog(`劫變(剋)：${ELEM_CHAR[cElem]}屬 玩家珠向外退 1 格`);
-      moveSpecificOrbOutward(cIdx, innermostLayer, playerOrbs[0]);
-      finishTribulation();
+      const playerOrbs = G.board[cIdx][innermostLayer].filter(o => o.owner === 'player');
+      if (playerOrbs.length > 1) {
+        G.tribPending = { action: 'restrain', elem: cElem, layer: innermostLayer };
+        tLog(`劫變(剋)：等待玩家抉擇承受衝擊的珠子`);
+        addLog(`⚠️ 天劫衝擊！${ELEM_CHAR[cElem]}屬「${LAYER_NAMES[innermostLayer]}」有多顆珠子，請點擊你要承受衝擊（向外退）的那顆！`, 'warn');
+        renderAll();
+      } else {
+        tLog(`劫變(剋)：${ELEM_CHAR[cElem]}屬 玩家珠向外退 1 格`);
+        moveSpecificOrbOutward(cIdx, innermostLayer, playerOrbs[0]);
+        finishTribulation();
+      }
     }
   }
 }
@@ -1317,7 +1319,9 @@ function canLearnSpell(spell) {
     return elems.every(e => G.refinery[ELEM.indexOf(e)] >= count);
   } else if (spell.learnType === 'formation') {
     const altarElems = G.altar.filter(Boolean).map(a => a.elem);
-    return spell.learnElems.every(e => altarElems.includes(e));
+    
+    // 【核心修復】原本的 every 寬鬆判定，改為呼叫嚴格比對函式
+    return isFormationMatch(altarElems, spell.learnElems);
   }
   return false;
 }
@@ -2161,6 +2165,24 @@ function renderAll() {
   renderActionBar();
 }
 
+// 嚴格比對陣法屬性與數量的輔助函式
+function isFormationMatch(altarElems, learnElems) {
+  let tempAltar = [...altarElems]; // 複製一份目前祭壇上的屬性清單
+  
+  for (let i = 0; i < learnElems.length; i++) {
+    const reqElem = learnElems[i];
+    const idx = tempAltar.indexOf(reqElem);
+    
+    if (idx === -1) {
+      return false; // 只要有任何一個屬性找不到，或是數量不夠被扣除，就判定失敗
+    }
+    // 找到了，就把它從暫存清單中消耗掉，避免重複計算
+    tempAltar.splice(idx, 1);
+  }
+  
+  return true; // 所有要求的屬性與「數量」都完美對應！
+}
+  
 /* ═══════════════════════════════════════════════════════════
    BOOT
 ═══════════════════════════════════════════════════════════ */
