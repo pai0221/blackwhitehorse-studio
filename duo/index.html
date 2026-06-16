@@ -5,6 +5,64 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>四象奇門 · 天劫降臨</title>
 <style>
+/* ── 祭壇生剋預覽特效 ── */
+.altar-cell { position: relative; } /* 確保預覽層能絕對定位 */
+
+.preview-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: var(--r-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  backdrop-filter: blur(2px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+.preview-icon {
+  font-size: 28px;
+  font-weight: 900;
+  text-shadow: 0 0 10px currentColor;
+}
+
+/* 呼吸浮動動畫 */
+@keyframes floatUp { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes floatDown { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+@keyframes pulsePlus { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+
+.arr-green { color: #50E3C2; animation: floatUp 1.5s infinite ease-in-out; }
+.arr-red   { color: #FF4B4B; animation: floatDown 1.5s infinite ease-in-out; }
+.arr-cyan-up   { color: #4DA8DA; animation: floatUp 1.5s infinite ease-in-out; }
+.arr-cyan-down { color: #4DA8DA; animation: floatDown 1.5s infinite ease-in-out; }
+.arr-cyan-plus { color: #4DA8DA; animation: pulsePlus 1.5s infinite ease-in-out; font-size: 32px; }
+  
+  /* ── 動態引導發光特效 (Action Cues) ── */
+@keyframes orbTargetGlow {
+  0%, 100% { stroke: var(--gold); stroke-width: 1.5; filter: drop-shadow(0 0 3px var(--gold)); }
+  50% { stroke: #FFF; stroke-width: 2.5; filter: drop-shadow(0 0 10px var(--gold)); }
+}
+.orb-target {
+  animation: orbTargetGlow 1.5s ease-in-out infinite;
+}
+
+@keyframes supplyPulse {
+  0%, 100% { box-shadow: 0 0 4px var(--gold); border-color: var(--border2); }
+  50% { box-shadow: 0 0 14px var(--gold); border-color: var(--gold); }
+}
+.supply-target {
+  animation: supplyPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes passiveGlow {
+  0%, 100% { box-shadow: 0 0 5px var(--wood); border-color: var(--wood); color: var(--wood); }
+  50% { box-shadow: 0 0 12px var(--wood); border-color: var(--wood-light); color: #FFF; }
+}
+.active-passive {
+  animation: passiveGlow 2s ease-in-out infinite;
+}
+  
 /* ── Fonts ── */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;700&family=Noto+Sans+TC:wght@300;400;500&display=swap');
 
@@ -386,7 +444,7 @@ body {
       <div class="card">
         <div class="card-title">精煉爐</div>
         <div id="refinery-grid"></div>
-        <div style="margin-top:4px;font-size:8px;color:var(--text3)">達1/2→+靈力　達3→額外放珠</div>
+
         <div style="margin-top:10px">
           <div class="card-title">回合記錄</div>
           <div id="log-area"></div>
@@ -744,6 +802,7 @@ function onHandCardClick(idx) {
   }
   G.selectedHandIdx = (G.selectedHandIdx === idx) ? null : idx;
   renderHand();
+  renderAltar();
   if (G.selectedHandIdx !== null) addLog(`選中手牌：${ELEM_CHAR[G.hand[idx].elem]}屬 ${BEASTS[G.hand[idx].beast].name}。請點擊「召喚祭壇」空格放置。`);
 }
 
@@ -928,6 +987,28 @@ function onBoardElemClick(elemIdx, layerIdx, clickedOrb) {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   SPECIAL ZONE CLICK (入界區與虛空區專用)
+═══════════════════════════════════════════════════════════ */
+function onSpecialZoneClick(zone) {
+  // 攔截：確認目前是否為玄武發動的第 2 步
+  if (G.beastPending && G.beastPending.beast === 'turtle' && G.beastPending.step === 2) {
+    const src = G.beastPending.source;
+    const targetOrb = src.orb;
+
+    G.beastPending = null; // 清除狀態
+
+    if (zone === 'entry') {
+      moveOrbInwardSpecific(src.e, src.l, targetOrb);
+      addLog(`🐢 玄武發威！將珠子往內層挪移推進。`, 'good');
+    } else if (zone === 'void') {
+      moveOrbOutwardSpecific(src.e, src.l, targetOrb);
+      addLog(`🐢 玄武發威！將珠子往外層挪移震退。`, 'good');
+    }
+    renderAll();
+  }
+}
+  
+/* ═══════════════════════════════════════════════════════════
    ATTRIBUTE LINKAGE (已加入結算佇列)
 ═══════════════════════════════════════════════════════════ */
 // 輔助函式：檢查土靈結界是否生效
@@ -1038,29 +1119,12 @@ function moveOrbInwardSpecific(elemIdx, fromLayer, targetOrb) {
   
   const orb = orbs.splice(idx, 1)[0]; // 拔起指定的珠子
 
-  // 本命珠臨界反彈判定
-  if (orb.type === 'life' && fromLayer === 0) {
-    addLog(`✨ 本命珠護體！於第2層抵擋入界衝擊，反彈回第3層。`, 'warn');
-    for (let targetLayer = 1; targetLayer <= 3; targetLayer++) {
-      const targetOrbs = G.board[elemIdx][targetLayer];
-      if (targetOrbs.length < MAX_ORBS_PER_SLOT) {
-        targetOrbs.push(orb);
-        G.lifeOrb = { elemIdx, layerIdx: targetLayer };
-        return true;
-      }
-    }
-    G.board[elemIdx][3].push(orb);
-    G.lifeOrb = { elemIdx, layerIdx: 3 };
-    return true;
-  }
-
-  // 尋找向內降落的圖層
+  // 1. 先尋找向內降落的圖層
   for (let targetLayer = fromLayer - 1; targetLayer >= 0; targetLayer--) {
     const targetOrbs = G.board[elemIdx][targetLayer];
     
     // 【核心修正：劫變排斥性檢查】
     let canPlace = targetOrbs.length < MAX_ORBS_PER_SLOT;
-    // 如果移動的是「劫珠」，且目標層「已經有劫珠」，則此層視為不可降落，必須強制跳下一層
     if (orb.type === 'trib' && targetOrbs.some(o => o.type === 'trib')) {
       canPlace = false;
     }
@@ -1072,6 +1136,28 @@ function moveOrbInwardSpecific(elemIdx, fromLayer, targetOrb) {
     }
   }
   
+  // ─── 【修復核心】：向內無路可進（已在第2層，或內層皆滿）───
+  if (orb.type === 'life') {
+    addLog(`✨ 本命珠護體！向內受阻，激發陣法向外反彈。`, 'warn');
+    
+    // 改為向外尋找空位 (從 fromLayer + 1 往外找)
+    for (let targetLayer = fromLayer + 1; targetLayer <= 3; targetLayer++) {
+      const targetOrbs = G.board[elemIdx][targetLayer];
+      if (targetOrbs.length < MAX_ORBS_PER_SLOT) {
+        targetOrbs.push(orb);
+        G.lifeOrb = { elemIdx, layerIdx: targetLayer };
+        return true;
+      }
+    }
+    
+    // 若連外層也全部客滿，則放回原本的層級（因為剛才拔起了它，原地必定有空位）
+    G.board[elemIdx][fromLayer].push(orb);
+    G.lifeOrb = { elemIdx, layerIdx: fromLayer };
+    addLog(`✨ 本命珠進退兩難，穩固於原地！`, 'warn');
+    return true;
+  }
+
+  // ─── 其他珠子的入界處理 ───
   // 內層皆無法降落，正式進入界內
   handleOrbEntry(elemIdx, orb.type, orb.owner);
   return true;
@@ -1090,28 +1176,12 @@ function moveOrbOutwardSpecific(elemIdx, fromLayer, targetOrb) {
   
   const orb = orbs.splice(idx, 1)[0]; // 拔起指定的珠子
 
-  // 本命珠臨界反彈判定
-  if (orb.type === 'life' && fromLayer === 3) {
-    addLog(`✨ 本命珠共鳴！於混沌層退無可退，激發陣法反彈回第4層。`, 'warn');
-    for (let targetLayer = 2; targetLayer >= 0; targetLayer--) {
-      const targetOrbs = G.board[elemIdx][targetLayer];
-      if (targetOrbs.length < MAX_ORBS_PER_SLOT) {
-        targetOrbs.push(orb);
-        G.lifeOrb = { elemIdx, layerIdx: targetLayer };
-        return true;
-      }
-    }
-    handleOrbEntry(elemIdx, orb.type, orb.owner);
-    return true;
-  }
-
-  // 尋找向外降落的圖層
+  // 1. 先尋找向外降落的圖層
   for (let targetLayer = fromLayer + 1; targetLayer <= 3; targetLayer++) {
     const targetOrbs = G.board[elemIdx][targetLayer];
     
     // 【核心修正：劫變排斥性檢查】
     let canPlace = targetOrbs.length < MAX_ORBS_PER_SLOT;
-    // 如果移動的是「劫珠」，且目標層「已經有劫珠」，同樣強制略過、跳往下一層
     if (orb.type === 'trib' && targetOrbs.some(o => o.type === 'trib')) {
       canPlace = false;
     }
@@ -1123,14 +1193,31 @@ function moveOrbOutwardSpecific(elemIdx, fromLayer, targetOrb) {
     }
   }
   
-  // 出界處理
+  // ─── 【修復核心】：本命珠向外無路可退（在混沌層，或外層已全滿）───
+  if (orb.type === 'life') {
+    addLog(`✨ 本命珠共鳴！向外受阻，激發陣法向內反彈。`, 'warn');
+    // 改為向內尋找空位
+    for (let targetLayer = fromLayer - 1; targetLayer >= 0; targetLayer--) {
+      const targetOrbs = G.board[elemIdx][targetLayer];
+      if (targetOrbs.length < MAX_ORBS_PER_SLOT) {
+        targetOrbs.push(orb);
+        G.lifeOrb = { elemIdx, layerIdx: targetLayer };
+        return true;
+      }
+    }
+    // 若連內層都全滿退無可退，則強制入界得分
+    handleOrbEntry(elemIdx, orb.type, orb.owner);
+    return true;
+  }
+
+  // ─── 其他珠子的出界處理 ───
   if (orb.type === 'normal') {
     G.normalOrbs++;
     G.mana = Math.min(G.maxMana, G.mana + 1);
     addLog(`一般珠被逼出陣外，獲得 +1 靈力`, 'good');
   } else if (orb.type === 'trib') {
     addLog(`✨ 劫珠被你的生剋之力逼出陣外，消散於天地間！`, 'good');
-    if (isHeavenlyFireActive()) {
+    if (typeof isHeavenlyFireActive === 'function' && isHeavenlyFireActive()) {
       G.mana = Math.min(G.maxMana, G.mana + 1);
       addLog(`🔥 九天玄火：煉化出界劫珠，獲得 +1 靈力！`, 'good');
     }
@@ -1248,24 +1335,14 @@ function moveTribOrbInward(elemIdx) {
   return true;
 }
 
+// 替換原本的 moveSpecificOrbOutward
 function moveSpecificOrbOutward(elemIdx, fromLayer, targetOrb) {
   const orbs = G.board[elemIdx][fromLayer];
   const idx = orbs.indexOf(targetOrb);
   if (idx === -1) return false;
   const orb = orbs.splice(idx, 1)[0];
 
-  if (orb.type === 'life' && fromLayer === 3) {
-    addLog(`✨ 本命珠共鳴！於混沌層退無可退，反彈回第4層。`, 'warn');
-    for (let targetLayer = 2; targetLayer >= 0; targetLayer--) {
-      if (getOrbCount(elemIdx, targetLayer) < MAX_ORBS_PER_SLOT) {
-        G.board[elemIdx][targetLayer].push(orb);
-        G.lifeOrb = { elemIdx, layerIdx: targetLayer };
-        return true;
-      }
-    }
-    handleOrbEntry(elemIdx, orb.type, orb.owner);
-    return true;
-  }
+  // 1. 先尋找向外降落的圖層
   for (let targetLayer = fromLayer + 1; targetLayer <= 3; targetLayer++) {
     if (getOrbCount(elemIdx, targetLayer) < MAX_ORBS_PER_SLOT) {
       G.board[elemIdx][targetLayer].push(orb);
@@ -1273,6 +1350,23 @@ function moveSpecificOrbOutward(elemIdx, fromLayer, targetOrb) {
       return true;
     }
   }
+  
+  // ─── 【修復核心】：本命珠向外無路可退（在混沌層，或外層已全滿）───
+  if (orb.type === 'life') {
+    addLog(`✨ 本命珠共鳴！向外受阻，激發陣法向內反彈。`, 'warn');
+    for (let targetLayer = fromLayer - 1; targetLayer >= 0; targetLayer--) {
+      if (getOrbCount(elemIdx, targetLayer) < MAX_ORBS_PER_SLOT) {
+        G.board[elemIdx][targetLayer].push(orb);
+        G.lifeOrb = { elemIdx, layerIdx: targetLayer };
+        return true;
+      }
+    }
+    // 若連內層都全滿，強制入界
+    handleOrbEntry(elemIdx, orb.type, orb.owner);
+    return true;
+  }
+
+  // ─── 其他珠子的出界處理 ───
   if (orb.type === 'normal') {
     G.normalOrbs++;
     G.mana = Math.min(G.maxMana, G.mana + 1);
@@ -1468,13 +1562,22 @@ function triggerLineageScoring() {
 
 function removeScoringOrb(eIdx, lIdx) {
   const orbs = G.board[eIdx][lIdx];
-  // 優先尋找並移除「一般珠」
+  
+  // 1. 優先檢查該區域是否有「本命珠」坐鎮
+  const hasLifeOrb = orbs.some(o => o.type === 'life');
+  if (hasLifeOrb) {
+    // 本命珠作為連線節點，且本命不滅，因此庇護同區的其他珠子，不消耗任何實體珠
+    // 可以視需求加入一行 Log 提示玩家這波精湛的操作
+    // addLog(`✨ 本命珠鎮守陣眼，本次連線不消耗該格珠子！`, 'good');
+    return; 
+  }
+  
+  // 2. 若無本命珠，才尋找並消耗一顆「一般珠」
   const normalIdx = orbs.findIndex(o => o.owner === 'player' && o.type === 'normal');
   if (normalIdx !== -1) {
     orbs.splice(normalIdx, 1);
     G.normalOrbs++; // 一般珠回歸牌庫
   }
-  // 如果找不到一般珠，代表該格只有「本命珠」，觸發本命不滅，不移除任何珠子
 }
 
 function hasPlayerOrb(eIdx, lIdx) {
@@ -1689,9 +1792,44 @@ function slotPositions(ei, li) {
   ];
 }
 
+  // 判斷該珠子目前是否為玩家可點擊的目標
+function isOrbTargetable(ei, li, orb) {
+  if (!orb) return false;
+  
+  // 1. 淨化劫珠
+  if (G.purifyQueue && G.purifyQueue.length > 0) {
+    const task = G.purifyQueue[0];
+    return orb.type === 'trib' && task.elems.includes(ei);
+  }
+  // 2. 天劫衝擊 (只能選受剋屬性最內層的玩家珠)
+  if (G.tribPending && G.tribPending.action === 'restrain') {
+    return ei === ELEM.indexOf(G.tribPending.elem) && li === G.tribPending.layer && orb.owner === 'player';
+  }
+  // 3. 生剋結算 (只亮當前要結算之屬性上的珠子)
+  if (G.pendingEffects && G.pendingEffects.length > 0) {
+    const effectElems = G.pendingEffects.map(e => ELEM.indexOf(e.elem));
+    return effectElems.includes(ei);
+  }
+  // 4. 神獸 / 法術 指定目標
+  if (G.beastPending && G.beastPending.step === 1) return true; // 青龍玄武發動中，全盤珠子皆可選
+  if (G.spellPending && G.spellPending.id === 'wood_spirit') return ei !== 0; // 木靈不能選木屬性本身
+  
+  return false;
+}
+  
 function renderBoard() {
   const svg = document.getElementById('boardSvg');
   svg.innerHTML = '';
+
+  // 【新增】0. 渲染虛空區 (最底層，用來捕捉向外的點擊)
+  const voidBg = document.createElementNS(NS, 'circle');
+  voidBg.setAttribute('cx', BCX);
+  voidBg.setAttribute('cy', BCY);
+  voidBg.setAttribute('r', R_OUTER + 45); // 比最外圈再大 45
+  voidBg.setAttribute('fill', 'transparent'); // 透明，純粹用來感應點擊
+  voidBg.style.cursor = 'pointer';
+  voidBg.addEventListener('click', (e) => { e.stopPropagation(); onSpecialZoneClick('void'); });
+  svg.appendChild(voidBg);
   
   // 1. 渲染底圖扇形
   ELEM.forEach((elem, ei) => {
@@ -1757,12 +1895,18 @@ function renderBoard() {
   const cc = document.createElementNS(NS,'circle');
   cc.setAttribute('cx',BCX); cc.setAttribute('cy',BCY); cc.setAttribute('r',R_ENTRY);
   cc.setAttribute('fill','#F0EDE8'); cc.setAttribute('stroke','#AAAAAA'); cc.setAttribute('stroke-width','1.2');
+  cc.style.cursor = 'pointer'; // 【新增】加入游標變化
+  cc.addEventListener('click', (e) => { e.stopPropagation(); onSpecialZoneClick('entry'); }); // 【新增】綁定入界區點擊
   svg.appendChild(cc);
+  
   const ct = document.createElementNS(NS,'text');
   ct.setAttribute('x',BCX); ct.setAttribute('y',BCY);
   ct.setAttribute('text-anchor','middle'); ct.setAttribute('dominant-baseline','middle');
   ct.setAttribute('fill','#888'); ct.setAttribute('font-size','8');
-  ct.textContent='入界區'; svg.appendChild(ct);
+  ct.textContent='入界區'; 
+  ct.style.cursor = 'pointer'; // 【新增】加入游標變化
+  ct.addEventListener('click', (e) => { e.stopPropagation(); onSpecialZoneClick('entry'); }); // 【新增】綁定入界區點擊
+  svg.appendChild(ct);
 
  // 5. 渲染實體珠子（玩家珠與劫珠）
   ELEM.forEach((elem, ei) => {
@@ -1800,6 +1944,12 @@ function renderBoard() {
         } else {
           c.setAttribute('fill','#F0EDE8'); c.setAttribute('stroke','#888780'); c.setAttribute('stroke-width','1');
         }
+        
+        // ─── 【新增】：若該珠子為當前操作目標，套用發光動畫 ───
+        if (isOrbTargetable(ei, li, orb)) {
+          c.classList.add('orb-target');
+        }
+        // ───────────────────────────────────────────
         c.style.cursor='pointer';
         // 確保擠出框外的珠子依然可以被精準點擊
         c.addEventListener('click', (e) => { e.stopPropagation(); onBoardElemClick(ei, li, orb); });
@@ -1845,17 +1995,48 @@ function renderRefinery() {
     col.className = 'ref-col';
     const bars = document.createElement('div');
     bars.className = 'ref-bars';
+
+    const targetElem = GENERATES[elem];
+    const targetColor = ELEM_COLOR[targetElem];
+
     for (let lv = 0; lv < 3; lv++) {
       const cell = document.createElement('div');
       cell.className = 'ref-cell' + (lv < G.refinery[ei] ? ' filled' : '');
-      if (lv < G.refinery[ei]) cell.style.background = ELEM_COLOR[elem];
+      
+      cell.style.display = 'flex';
+      cell.style.alignItems = 'center';
+      cell.style.justifyContent = 'center';
+
+      if (lv < G.refinery[ei]) {
+        cell.style.background = ELEM_COLOR[elem];
+        cell.innerHTML = ''; 
+      } else {
+        if (lv === 0 || lv === 1) {
+          cell.innerHTML = `
+            <svg viewBox="0 0 24 24" width="10" height="10" style="opacity:0.6;">
+              <path fill="var(--mana)" d="M12 2C12 2 7 7.5 7 12A5 5 0 0 0 12 17A5 5 0 0 0 17 12C17 7.5 12 2 12 2Z"/>
+            </svg>`;
+        } else if (lv === 2) {
+          cell.innerHTML = `<div style="width:10px; height:10px; border-radius:50%; border:1.5px solid ${targetColor}; opacity:0.6;"></div>`;
+        }
+      }
       bars.appendChild(cell);
     }
+    
     const label = document.createElement('div');
     label.className = 'ref-label';
     label.style.color = ELEM_COLOR[elem];
     label.textContent = `${ELEM_CHAR[elem]} ${G.refinery[ei]}`;
     col.appendChild(bars); col.appendChild(label);
+    
+    // ─── 【新增】：綁定動態懸停 Tooltip 提示 ───
+    col.style.cursor = 'pointer'; // 改變游標，提示玩家此處可互動
+    col.addEventListener('mouseenter', e => showTooltip(e, {
+      name: `${ELEM_CHAR[elem]}屬精煉`,
+      extra: `第 1、2 階：獲得 1 點靈力<br>第 3 階大成：極生${ELEM_CHAR[targetElem]}，自動於 <b style="color:${targetColor}">${ELEM_CHAR[targetElem]}屬</b> 降下 1 顆一般珠`
+    }));
+    col.addEventListener('mouseleave', hideTooltip);
+
     grid.appendChild(col);
   });
 }
@@ -1866,16 +2047,51 @@ function renderAltar() {
     if (!cell) return;
     cell.innerHTML = '';
     cell.className = 'altar-cell' + (card?.isSealed ? ' sealed' : '');
+    
     if (!card) {
       cell.innerHTML = '<span style="font-size:10px;color:var(--text3)">空格</span>';
       return;
     }
+    
     const beast = BEASTS[card.beastKey];
     cell.innerHTML = `
       <span class="beast-icon">${beast.icon}</span>
       <span class="beast-name" style="color:${ELEM_COLOR[card.elem]}">${ELEM_CHAR[card.elem]}·${beast.name}</span>
       <span class="beast-status">${card.isSealed ? '封印中' : `消耗${beast.manaCost}靈`}</span>
     `;
+    
+    // ─── 【新增】：生剋動態預覽邏輯 ───
+    if (G.phase === 'summon' && G.selectedHandIdx !== null) {
+      const pElem = G.hand[G.selectedHandIdx].elem; // 玩家選取的手牌屬性
+      const aElem = card.elem; // 祭壇上的屬性
+      
+      let iconHtml = '';
+      if (GENERATES[pElem] === aElem) {
+        // 祭壇牌向內
+        iconHtml = '<span class="preview-icon arr-green">🡅</span>';
+      } else if (RESTRAINS[pElem] === aElem) {
+        // 祭壇牌向外
+        iconHtml = '<span class="preview-icon arr-red">🡇</span>';
+      } else if (GENERATES[aElem] === pElem) {
+        // 手牌向內
+        iconHtml = '<span class="preview-icon arr-cyan-up">🡅</span>';
+      } else if (RESTRAINS[aElem] === pElem) {
+        // 手牌向外
+        iconHtml = '<span class="preview-icon arr-cyan-down">🡇</span>';
+      } else if (pElem === aElem) {
+        // 同屬精煉
+        iconHtml = '<span class="preview-icon arr-cyan-plus">＋</span>';
+      }
+      
+      if (iconHtml) {
+        const overlay = document.createElement('div');
+        overlay.className = 'preview-overlay';
+        overlay.innerHTML = iconHtml;
+        cell.appendChild(overlay);
+      }
+    }
+    // ────────────────────────────────
+    
     cell.setAttribute('data-tooltip-beast', card.beastKey);
   });
 }
@@ -1889,12 +2105,20 @@ function renderSpells() {
   }
   G.learnedSpells.forEach((spell, idx) => {
     const chip = document.createElement('div');
-    // 如果法術用過了就加上 exhausted；如果是目前正在準備施展的法術就加上強光效果
     let cls = 'spell-chip';
     if (spell.exhausted) cls += ' exhausted';
-    if (G.spellPending && G.spellPending.spellIdx === idx) cls += ' active'; // 準備施法中
-    chip.className = cls;
+    if (G.spellPending && G.spellPending.spellIdx === idx) cls += ' active'; 
     
+    // ─── 【新增】：判斷被動法術是否正在生效中 ───
+    let isActivePassive = false;
+    if (spell.id === 'fire_cauldron' && typeof isFireCauldronActive === 'function' && isFireCauldronActive()) isActivePassive = true;
+    if (spell.id === 'heavenly_fire' && typeof isHeavenlyFireActive === 'function' && isHeavenlyFireActive()) isActivePassive = true;
+    if (spell.id === 'earth_barrier' && typeof isEarthBarrierActive === 'function' && isEarthBarrierActive()) isActivePassive = true;
+    
+    if (isActivePassive) cls += ' active-passive';
+    // ───────────────────────────────────────────
+    
+    chip.className = cls;
     chip.textContent = spell.name;
     // 【新增】點擊法術晶片觸發施法
     chip.addEventListener('click', () => castSpell(idx));
@@ -1934,13 +2158,23 @@ function renderHand() {
 function renderSummonSupply() {
   const area = document.getElementById('summon-supply');
   area.innerHTML = '';
+  
+  // 【新增】：判斷目前是否處於「必須點擊供給區」的狀態
+  const needsDraw = (G.phase === 'end' && G.hand.length < 3 && G.summonDeck.length > 0) ||
+                    ((G.phase === 'spell' || G.phase === 'summon') && isFireCauldronActive() && G.selectedHandIdx !== null);
+
   G.summonSupply.forEach((card, idx) => {
     if (!card) return;
     const beast = BEASTS[card.beast];
     const ec = ELEM_COLOR[card.elem];
     const el = document.createElement('div');
     el.className = 'supply-card';
+    
+    // 【修改】：如果處於需要抽牌的狀態，就加上發光特效
+    if (needsDraw) el.classList.add('supply-target');
+    
     el.style.borderColor = ec + '80';
+    // ... 後方保留原代碼
     el.innerHTML = `<span class="sc-icon">${beast.icon}</span><span class="sc-elem" style="color:${ec}">${ELEM_CHAR[card.elem]}</span><span style="font-size:8px;color:var(--text3)">${beast.name}</span>`;
     el.addEventListener('mouseenter', e => showTooltip(e, {
       name: `${ELEM_CHAR[card.elem]}屬 ${beast.name}`,
@@ -2010,11 +2244,43 @@ function renderSpellSupply() {
     const bgCol     = learnable ? '#2A2010' : 'var(--bg3)';
     el.style.borderColor = borderCol;
     el.style.background  = bgCol;
+
+    // ─── 【新增】：解析並生成學習條件的微型視覺徽章 ───
+    let conditionHTML = '';
+    if (spell.learnType === 'formation') {
+      // 陣法條件：顯示需要的五行屬性小方塊
+      const badges = spell.learnElems.map(e =>
+        `<span style="color:${ELEM_COLOR[e]}; border:1px solid ${ELEM_COLOR[e]}66; border-radius:3px; padding:1px 3px; font-size:8px; background:${ELEM_FILL[e]};">${ELEM_CHAR[e]}</span>`
+      ).join('');
+      conditionHTML = `<div style="display:flex; gap:2px; flex-wrap:wrap; justify-content:flex-end;">${badges}</div>`;
+      
+    } else if (spell.learnType === 'refine') {
+      // 精煉條件：顯示對應的精煉需求
+      if (spell.learnElems === 'any') {
+        conditionHTML = `<span style="font-size:8px; color:var(--text2); border:1px solid var(--border2); padding:1px 4px; border-radius:3px; background:var(--bg2);">任意精煉 ${spell.learnCount}</span>`;
+      } else {
+        const badges = spell.learnElems.map(e =>
+          `<span style="color:${ELEM_COLOR[e]}; border:1px solid ${ELEM_COLOR[e]}66; border-radius:3px; padding:1px 3px; font-size:8px; background:${ELEM_FILL[e]};">${ELEM_CHAR[e]}精煉 ${spell.learnCount}</span>`
+        ).join('');
+        conditionHTML = `<div style="display:flex; gap:2px; flex-wrap:wrap; justify-content:flex-end;">${badges}</div>`;
+      }
+    }
+
+    // ─── 【修改】：將卡牌版面重構為左右兩欄結構 ───
     el.innerHTML = `
-      <span class="ssi-name" style="color:${learnable ? '#D4A843' : 'var(--text)'}">${spell.name}</span>
-      <span class="ssi-sub">${spell.score}分・${spell.activation==='passive'?'被動':spell.activation==='once'?'1次':spell.manaCost+'靈'}</span>
+      <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <span class="ssi-name" style="color:${learnable ? '#D4A843' : 'var(--text)'}">${spell.name}</span>
+          <span class="ssi-sub">${spell.score}分・${spell.activation==='passive'?'被動':spell.activation==='once'?'1次':spell.manaCost+'靈'}</span>
+          ${learnable ? '<span style="font-size:8px;color:#D4A843;margin-top:2px;font-weight:600;">✦ 可習得</span>' : ''}
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:3px; max-width:55%;">
+          <span style="font-size:7px; color:var(--text3); transform:scale(0.9); transform-origin:right;">(習得條件)</span>
+          ${conditionHTML}
+        </div>
+      </div>
     `;
-    if (learnable) el.innerHTML += '<span style="font-size:8px;color:#D4A843;margin-top:2px">✦ 可習得</span>';
+
     el.addEventListener('click', () => learnSpell(idx));
     el.addEventListener('mouseenter', e => showTooltip(e, spell));
     el.addEventListener('mouseleave', hideTooltip);
@@ -2190,6 +2456,8 @@ initGame();
 </script>
 </body>
 </html>
+
+
 
 
 
