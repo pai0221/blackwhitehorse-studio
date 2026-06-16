@@ -6,7 +6,7 @@
 <title>四象奇門 · 天劫降臨</title>
 <style>
 /* ── 祭壇生剋預覽特效 ── */
-.altar-cell { position: relative; } /* 確保預覽層能絕對定位 */
+.altar-cell { position: relative; }
 
 .preview-overlay {
   position: absolute;
@@ -24,7 +24,6 @@
 .preview-icon {
   font-size: 28px;
   font-weight: 900;
-  text-shadow: 0 0 10px currentColor;
 }
 
 /* 呼吸浮動動畫 */
@@ -32,11 +31,9 @@
 @keyframes floatDown { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
 @keyframes pulsePlus { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
 
-.arr-green { color: #50E3C2; animation: floatUp 1.5s infinite ease-in-out; }
-.arr-red   { color: #FF4B4B; animation: floatDown 1.5s infinite ease-in-out; }
-.arr-cyan-up   { color: #4DA8DA; animation: floatUp 1.5s infinite ease-in-out; }
-.arr-cyan-down { color: #4DA8DA; animation: floatDown 1.5s infinite ease-in-out; }
-.arr-cyan-plus { color: #4DA8DA; animation: pulsePlus 1.5s infinite ease-in-out; font-size: 32px; }
+.anim-float-up { animation: floatUp 1.5s infinite ease-in-out; }
+.anim-float-down { animation: floatDown 1.5s infinite ease-in-out; }
+.anim-pulse { animation: pulsePlus 1.5s infinite ease-in-out; font-size: 32px; }
   
   /* ── 動態引導發光特效 (Action Cues) ── */
 @keyframes orbTargetGlow {
@@ -785,6 +782,11 @@ function finishEndPhase() {
    SUMMON ACTION (已修正點擊流程)
 ═══════════════════════════════════════════════════════════ */
 function onHandCardClick(idx) {
+  // ─── 【新增防呆：未結算完畢前鎖定手牌】 ───
+  if (G.pendingEffects.length > 0 || G.purifyQueue.length > 0 || G.tribPending) {
+    addLog('請先結算完目前的生剋移動或淨化陣法，再進行下一個動作！', 'bad');
+    return;
+  }
   // ─── 【新增】攔截麒麟的換牌目標 ───
   if (G.beastPending && G.beastPending.beast === 'kirin') {
     G.beastPending.handIdx = idx;
@@ -1090,19 +1092,19 @@ function processNextEffect() {
     }
   }
 
-  // ─── 【修復點】額外召喚次數的階段判定 ───
+ // ─── 【核心修復：依照正確的標記推進階段】 ───
   if (G.pendingEffects.length === 0) {
-    if (G.extraSummonThisTurn) { 
-      G.extraSummonThisTurn = false; // 消耗掉這次額外機會
-      setPhase('summon'); // 留在召喚階段
-      addLog(`✨ 無相轉生發威！請繼續點選手牌，進行本回合第二次召喚。`, 'good');
+    if (G.summonDoneThisTurn) { 
+      setPhase('end'); // 次數用盡，進入結束階段
     } else { 
-      G.summonDoneThisTurn = true; 
-      setPhase('end'); // 沒有額外次數，才進入結束階段
+      // 若 summonDoneThisTurn 還是 false，代表剛才消耗的是 extraSummonThisTurn
+      setPhase('summon'); 
+      addLog(`✨ 無相轉生發威！請繼續點選手牌，進行本回合第二次召喚。`, 'good');
     }
     renderAll();
     return;
   }
+  // ─────────────────────────────────────────
   
   const effectDescList = G.pendingEffects.map(e => 
     `${ELEM_CHAR[e.elem]}屬(${e.type === 'inward' ? '進' : '退'})`
@@ -1661,6 +1663,14 @@ function onAltarClick(slotIdx) {
     G.hand.splice(G.selectedHandIdx, 1);
     G.selectedHandIdx = null;
 
+// ─── 【核心修復：立刻扣除召喚次數，封鎖重複出牌】 ───
+    if (G.extraSummonThisTurn) {
+      G.extraSummonThisTurn = false;
+    } else {
+      G.summonDoneThisTurn = true;
+    }
+    // ───────────────────────────────────────────
+    
     const eIdx = ELEM.indexOf(card.elem);
     placeOrbAtChaos(eIdx);
     let orbStr = '1顆';
@@ -2060,30 +2070,47 @@ function renderAltar() {
       <span class="beast-status">${card.isSealed ? '封印中' : `消耗${beast.manaCost}靈`}</span>
     `;
     
-    // ─── 【新增】：生剋動態預覽邏輯 ───
+   // ─── 【新增】：生剋動態預覽邏輯（精準屬性對應） ───
     if (G.phase === 'summon' && G.selectedHandIdx !== null) {
       const pElem = G.hand[G.selectedHandIdx].elem; // 玩家選取的手牌屬性
       const aElem = card.elem; // 祭壇上的屬性
       
-      let iconHtml = '';
+      let moveElem = null; // 決定是哪個屬性的珠子要移動（以此決定顏色）
+      let symbol = '';
+      let animClass = '';
+      
       if (GENERATES[pElem] === aElem) {
-        // 祭壇牌向內
-        iconHtml = '<span class="preview-icon arr-green">🡅</span>';
+        // 玩家生祭壇：祭壇上的珠子向內進
+        moveElem = aElem;
+        symbol = '▲';
+        animClass = 'anim-float-up';
       } else if (RESTRAINS[pElem] === aElem) {
-        // 祭壇牌向外
-        iconHtml = '<span class="preview-icon arr-red">🡇</span>';
+        // 玩家剋祭壇：祭壇上的珠子向外退
+        moveElem = aElem;
+        symbol = '▼';
+        animClass = 'anim-float-down';
       } else if (GENERATES[aElem] === pElem) {
-        // 手牌向內
-        iconHtml = '<span class="preview-icon arr-cyan-up">🡅</span>';
+        // 祭壇生玩家：玩家打出的珠子向內進
+        moveElem = pElem;
+        symbol = '▲';
+        animClass = 'anim-float-up';
       } else if (RESTRAINS[aElem] === pElem) {
-        // 手牌向外
-        iconHtml = '<span class="preview-icon arr-cyan-down">🡇</span>';
+        // 祭壇剋玩家：玩家打出的珠子向外退
+        moveElem = pElem;
+        symbol = '▼';
+        animClass = 'anim-float-down';
       } else if (pElem === aElem) {
-        // 同屬精煉
-        iconHtml = '<span class="preview-icon arr-cyan-plus">＋</span>';
+        // 同屬精煉：原地靈力激盪
+        moveElem = pElem;
+        symbol = '＋';
+        animClass = 'anim-pulse';
       }
       
-      if (iconHtml) {
+      if (moveElem) {
+        const color = ELEM_COLOR[moveElem];
+        // 將該屬性的專屬顏色與發光效果，直接寫入 style 中
+        const iconHtml = `<span class="preview-icon ${animClass}" style="color: ${color}; filter: drop-shadow(0 0 6px ${color});">${symbol}</span>`;
+        
         const overlay = document.createElement('div');
         overlay.className = 'preview-overlay';
         overlay.innerHTML = iconHtml;
