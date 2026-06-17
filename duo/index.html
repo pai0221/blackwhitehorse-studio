@@ -373,6 +373,24 @@ body {
 #modal-box .btn { margin: 0 4px; }
 
 /* ── Animations ── */
+  /* ── 本命珠專屬特效 ── */
+@keyframes lifeOrbPulse {
+  0%, 100% { filter: drop-shadow(0 0 4px var(--gold)); }
+  50% { filter: drop-shadow(0 0 12px #FFD700); }
+}
+.life-orb-glow {
+  animation: lifeOrbPulse 2s ease-in-out infinite;
+}
+
+@keyframes spinSlow { 
+  100% { transform: rotate(360deg); } 
+}
+.anim-spin-center {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: spinSlow 8s linear infinite;
+}
+  
 @keyframes fadeIn  { from { opacity:0; transform: scale(.92); } to { opacity:1; transform:scale(1); } }
 @keyframes pulse   { 0%,100% { opacity:1; } 50% { opacity:.5; } }
 @keyframes shake   { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-4px)} 40%,80%{transform:translateX(4px)} }
@@ -387,7 +405,14 @@ body {
 <div id="app">
   <!-- Header -->
   <header id="header">
-    <h1>四象奇門 · 天劫降臨</h1>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <h1>四象奇門 · 天劫降臨</h1>
+      <select id="difficulty-select" onchange="changeDifficulty()" style="background:var(--bg3); color:var(--text); border:1px solid var(--border2); border-radius:4px; padding:2px 6px; font-size:11px;">
+        <option value="easy">簡單 (無額外劫珠)</option>
+        <option value="normal" selected>一般 (共鳴+1劫珠)</option>
+        <option value="hard">困難 (依共鳴張數加劫珠)</option>
+      </select>
+    </div>
     <div id="phase-indicator">
       <span class="phase-badge" id="pb-spell">法術</span>
       <span style="color:var(--border2)">›</span>
@@ -553,13 +578,24 @@ const SPELLS_DATA = {
   water_power:    {name:'玄冥之力', score:2, activation:'passive', manaCost:0, learnType:'refine',    learnCount:2, learnElems:['water'], effect:'每次完成連線中若有水屬性，額外+1分。'},
 };
 
+  function changeDifficulty() {
+  const sel = document.getElementById('difficulty-select');
+  G.difficulty = sel.value;
+  addLog(`⚙️ 遊戲難度已切換為：${sel.options[sel.selectedIndex].text}`, 'important');
+  renderAll(); // 【新增】切換難度後立刻刷新畫面
+}
+  
 /* ═══════════════════════════════════════════════════════════
    GAME STATE
 ═══════════════════════════════════════════════════════════ */
 let G = {};
 
 function initGame() {
+  // 若已經有難度設定，保留它；否則預設為 'normal'
+  const currentDiff = G.difficulty || 'normal';
   G = {
+    difficulty: currentDiff, // 'easy', 'normal', 'hard'
+    peekedNextTrib: false, // 【新增】記錄本回合是否已窺探天機
     phase: 'setup_life', 
     round: 1,
     spellLearnedThisTurn: false,
@@ -1247,11 +1283,30 @@ function runTribulation() {
   tLog(`降劫：${ELEM_CHAR[aElem]}屬降下 1 顆劫珠`);
   placeTribOrb(aIdx, 3);
 
-  let sealed = false;
+ // ─── 替換 runTribulation 內原本的封印判定區塊 ───
+  let resonantCount = 0; // 計算共鳴的張數
   G.altar.forEach(c => {
-    if (c && c.elem === aElem) { c.isSealed = true; sealed = true; }
+    if (c && c.elem === aElem) { 
+      c.isSealed = true; 
+      resonantCount++; 
+    }
   });
-  if (sealed) tLog(`共鳴：祭壇 ${ELEM_CHAR[aElem]}屬 神獸遭封印`);
+
+  if (resonantCount > 0) {
+    tLog(`共鳴：祭壇 ${ELEM_CHAR[aElem]}屬 神獸遭封印`);
+    
+    // 難度懲罰結算
+    if (G.difficulty === 'normal') {
+      tLog(`⚠️ 一般難度：共鳴加劇，額外降下 1 顆劫珠`);
+      placeTribOrb(aIdx, 3);
+    } else if (G.difficulty === 'hard') {
+      tLog(`💀 困難難度：陣法共鳴引動天雷，額外降下 ${resonantCount} 顆劫珠！`);
+      for (let i = 0; i < resonantCount; i++) {
+        placeTribOrb(aIdx, 3);
+      }
+    }
+  }
+  // ──────────────────────────────────────────
 
   const movedInward = moveTribOrbInward(bIdx);
   if (movedInward) {
@@ -1295,6 +1350,7 @@ function runTribulation() {
 
 function finishTribulation() {
   G.round++;
+  G.peekedNextTrib = false; // 【新增】新回合重置窺探狀態
   addLog(`─── 回合 ${G.round} 開始 ───`, 'important');
   setPhase('spell');
   renderAll();
@@ -1457,6 +1513,24 @@ function learnSpell(spellIdx) {
   renderAll();
 }
 
+function peekTribulation() {
+  if (G.phase !== 'spell' && G.phase !== 'summon') { 
+    addLog('只能在「法術」或「召喚」階段窺探天機。', 'warn'); return; 
+  }
+  if (G.peekedNextTrib) { 
+    addLog('已窺探過下一次天劫，無需重複施法。', 'warn'); return; 
+  }
+  if (G.mana < 1) { 
+    addLog('靈力不足，無法窺探天機（需 1 靈力）。', 'warn'); return; 
+  }
+  if (G.tribDeck.length === 0) return; // 防呆
+
+  G.mana -= 1;
+  G.peekedNextTrib = true;
+  addLog('👁️ 消耗 1 靈力，窺探天機！下一道天劫的屬性已揭曉。', 'good');
+  renderAll();
+}
+  
   function castSpell(idx) {
   const spell = G.learnedSpells[idx];
   if (!spell) return;
@@ -1949,10 +2023,78 @@ function renderBoard() {
         const c = document.createElementNS(NS,'circle');
         c.setAttribute('cx',ox); c.setAttribute('cy',oy); c.setAttribute('r',ORB_R-0.5);
         
+       // ─── 提前判斷這顆珠子目前是否為「可點擊目標」 ───
+        const isTarget = isOrbTargetable(ei, li, orb);
+
         if (orb.type === 'trib') {
-          c.setAttribute('fill','#2C2C2A'); c.setAttribute('stroke','#888780'); c.setAttribute('stroke-width','1');
+          c.setAttribute('fill','#2C2C2A'); 
+          c.setAttribute('stroke','#888780'); 
+          c.setAttribute('stroke-width','1');
+        } else if (orb.type === 'life') {
+          // ─── 【本命珠專屬樣式】 ───
+          c.setAttribute('fill', 'var(--gold)'); 
+          c.setAttribute('stroke', '#FFF'); 
+          c.setAttribute('stroke-width', '1.5');
+          // 【修復衝突】：平時掛呼吸燈，一旦成為目標就卸下，讓 orb-target 接管
+          if (!isTarget) {
+            c.classList.add('life-orb-glow');
+          }
         } else {
-          c.setAttribute('fill','#F0EDE8'); c.setAttribute('stroke','#888780'); c.setAttribute('stroke-width','1');
+          // 一般珠
+          c.setAttribute('fill','#F0EDE8'); 
+          c.setAttribute('stroke','#888780'); 
+          c.setAttribute('stroke-width','1');
+        }
+        
+        // 如果是目標，統一掛上高亮閃爍特效
+        if (isTarget) {
+          c.classList.add('orb-target');
+        }
+        
+        c.style.cursor='pointer';
+        c.addEventListener('click', (e) => { e.stopPropagation(); onBoardElemClick(ei, li, orb); });
+        svg.appendChild(c);
+        
+        // ─── 【本命珠專屬圖騰與外圍全息環】 ───
+        if (orb.type === 'life') {
+          const lt = document.createElementNS(NS,'text');
+          lt.setAttribute('x',ox); 
+          // 根據星星符號的視覺重心，Y軸微調一下保持完美置中
+          lt.setAttribute('y',oy + 1); 
+          lt.setAttribute('text-anchor','middle'); 
+          lt.setAttribute('dominant-baseline','middle');
+          lt.setAttribute('fill','#1A1814'); 
+          lt.setAttribute('font-family', "'Noto Sans TC', sans-serif"); // 星星符號用無襯線體會比較俐落
+          lt.setAttribute('font-size','10'); // 稍微放大一點讓星星更明顯
+          lt.setAttribute('font-weight','900');
+          
+          // 【核心修改】：將 '命' 改成星星符號，你也可以依喜好換成 ✦ 或 ✶
+          lt.textContent = '★'; 
+          
+          lt.style.cursor='pointer';
+          lt.addEventListener('click', (e) => { e.stopPropagation(); onBoardElemClick(ei, li, orb); });
+          svg.appendChild(lt);
+
+          const ring = document.createElementNS(NS,'circle');
+          ring.setAttribute('cx',ox); 
+          ring.setAttribute('cy',oy);
+          ring.setAttribute('r', ORB_R + 3.5); 
+          ring.setAttribute('fill', 'none');
+          ring.setAttribute('stroke', 'var(--gold)');
+          ring.setAttribute('stroke-width', '0.8');
+          ring.setAttribute('stroke-dasharray', '2 4'); 
+          ring.classList.add('anim-spin-center'); 
+          ring.style.pointerEvents = 'none'; 
+          
+          // ─── 【新增聯動】：本命珠成為目標時，光環變白發光，且轉速暴增！ ───
+          if (isTarget) {
+            ring.style.animationDuration = '1.5s'; // 從 8s 提速到 1.5s
+            ring.setAttribute('stroke', '#FFF');
+            ring.style.filter = 'drop-shadow(0 0 4px #FFF)';
+          }
+          // ────────────────────────────────────────────────────────
+          
+          svg.appendChild(ring);
         }
         
         // ─── 【新增】：若該珠子為當前操作目標，套用發光動畫 ───
@@ -1970,8 +2112,11 @@ function renderBoard() {
           const lt = document.createElementNS(NS,'text');
           lt.setAttribute('x',ox); lt.setAttribute('y',oy+1);
           lt.setAttribute('text-anchor','middle'); lt.setAttribute('dominant-baseline','middle');
-          lt.setAttribute('fill','#555'); lt.setAttribute('font-size','6.5');
-          lt.textContent='命';
+         lt.setAttribute('fill','#1A1814'); 
+          lt.setAttribute('font-family', "'Noto Sans TC', sans-serif"); 
+          lt.setAttribute('font-size','10');
+          lt.setAttribute('font-weight','900');
+          lt.textContent = '★';
           lt.style.cursor='pointer';
           lt.addEventListener('click', (e) => { e.stopPropagation(); onBoardElemClick(ei, li, orb); });
           svg.appendChild(lt);
@@ -2126,33 +2271,61 @@ function renderAltar() {
 function renderSpells() {
   const area = document.getElementById('spells-area');
   area.innerHTML = '';
-  if (G.learnedSpells.length === 0) {
-    area.innerHTML = '<span style="font-size:9px;color:var(--text3)">—</span>';
-    return;
+  
+  // ─── 【新增】：常駐基礎法術「窺探天機」 ───
+  let hasSpells = false; // 記錄目前是否有任何法術(含常駐法術)
+
+  // ─── 【修改】：一般/困難難度，才顯示「窺探天機」按鈕 ───
+  if (G.difficulty !== 'easy') {
+    hasSpells = true;
+  const peekChip = document.createElement('div');
+  peekChip.className = 'spell-chip' + (G.peekedNextTrib ? ' exhausted' : '');
+  // 如果還沒窺探，給它一點特別的邊框顏色區分這是基礎能力
+  if (!G.peekedNextTrib) {
+    peekChip.style.borderColor = '#A8A49C';
+    peekChip.style.color = '#A8A49C';
   }
-  G.learnedSpells.forEach((spell, idx) => {
-    const chip = document.createElement('div');
-    let cls = 'spell-chip';
-    if (spell.exhausted) cls += ' exhausted';
-    if (G.spellPending && G.spellPending.spellIdx === idx) cls += ' active'; 
-    
-    // ─── 【新增】：判斷被動法術是否正在生效中 ───
-    let isActivePassive = false;
-    if (spell.id === 'fire_cauldron' && typeof isFireCauldronActive === 'function' && isFireCauldronActive()) isActivePassive = true;
-    if (spell.id === 'heavenly_fire' && typeof isHeavenlyFireActive === 'function' && isHeavenlyFireActive()) isActivePassive = true;
-    if (spell.id === 'earth_barrier' && typeof isEarthBarrierActive === 'function' && isEarthBarrierActive()) isActivePassive = true;
-    
-    if (isActivePassive) cls += ' active-passive';
-    // ───────────────────────────────────────────
-    
-    chip.className = cls;
-    chip.textContent = spell.name;
-    // 【新增】點擊法術晶片觸發施法
-    chip.addEventListener('click', () => castSpell(idx));
-    chip.addEventListener('mouseenter', e => showTooltip(e, spell));
-    chip.addEventListener('mouseleave', hideTooltip);
-    area.appendChild(chip);
-  });
+  peekChip.textContent = '👁️ 窺探天機';
+  peekChip.addEventListener('click', peekTribulation);
+  peekChip.addEventListener('mouseenter', e => showTooltip(e, {
+    name: '窺探天機 (基礎法術)',
+    manaCost: 1,
+    effect: '揭示下一回合即將降臨的天劫屬性。'
+  }));
+  peekChip.addEventListener('mouseleave', hideTooltip);
+  area.appendChild(peekChip);
+  }
+  // ──────────────────────────────────────────
+
+  // 渲染玩家學到的法術
+  if (G.learnedSpells.length > 0) {
+    hasSpells = true;
+    G.learnedSpells.forEach((spell, idx) => {
+      const chip = document.createElement('div');
+      let cls = 'spell-chip';
+      if (spell.exhausted) cls += ' exhausted';
+      if (G.spellPending && G.spellPending.spellIdx === idx) cls += ' active'; 
+      
+      let isActivePassive = false;
+      if (spell.id === 'fire_cauldron' && typeof isFireCauldronActive === 'function' && isFireCauldronActive()) isActivePassive = true;
+      if (spell.id === 'heavenly_fire' && typeof isHeavenlyFireActive === 'function' && isHeavenlyFireActive()) isActivePassive = true;
+      if (spell.id === 'earth_barrier' && typeof isEarthBarrierActive === 'function' && isEarthBarrierActive()) isActivePassive = true;
+      
+      if (isActivePassive) cls += ' active-passive';
+      
+      chip.className = cls;
+      chip.textContent = spell.name;
+      chip.addEventListener('click', () => castSpell(idx));
+      chip.addEventListener('mouseenter', e => showTooltip(e, spell));
+      chip.addEventListener('mouseleave', hideTooltip);
+      area.appendChild(chip);
+    });
+  }
+
+  // 如果簡單模式且沒有學到任何法術，顯示佔位符號
+  if (!hasSpells) {
+    area.innerHTML = '<span style="font-size:9px;color:var(--text3)">—</span>';
+  }
 }
 
 function renderHand() {
@@ -2326,13 +2499,37 @@ function renderTrib() {
   track.innerHTML += `<span style="font-size:9px;color:var(--text3);margin-left:4px">${G.tribOrbs}/3</span>`;
 
   const slot = document.getElementById('trib-card-slot');
-  if (!G.lastTribCard) {
-    slot.innerHTML = '<span style="font-size:10px;color:var(--text3)">（天劫回合後顯示）</span>';
+  // ─── 【新增】準備下一劫的極簡 HTML ───
+  let nextTribHtml = '';
+  if (G.tribDeck.length > 0) {
+// 【修改】：玩家花靈力窺探，或是「簡單難度」下，直接顯示屬性
+    if (G.peekedNextTrib || G.difficulty === 'easy') {
+      const nextElem = G.tribDeck[G.tribDeck.length - 1].elem; 
+      const color = ELEM_COLOR[nextElem];
+      nextTribHtml = `
+        <div style="margin-top:6px; padding-top:6px; border-top:1px dashed var(--border2); width:100%; text-align:center;">
+          <span style="font-size:10px; color:var(--text2);">下一劫：</span>
+          <span style="color:${color}; font-size:11px; font-weight:bold; border:1px solid ${color}; padding:1px 6px; border-radius:10px; background:${ELEM_FILL[nextElem]};">${ELEM_CHAR[nextElem]}</span>
+        </div>`;
+    } else {
+      nextTribHtml = `
+        <div style="margin-top:6px; padding-top:6px; border-top:1px dashed var(--border2); width:100%; text-align:center;">
+          <span style="font-size:10px; color:var(--text3);">下一劫：</span>
+          <span style="color:var(--text3); font-size:11px; border:1px solid var(--border2); padding:1px 6px; border-radius:10px; background:var(--bg3);">？</span>
+        </div>`;
+    }
+  }
+
+  // ─── 修改卡槽的渲染 ───
+ if (!G.lastTribCard) {
+    slot.innerHTML = `
+      <span style="font-size:10px;color:var(--text3)">（天劫回合後顯示）</span>
+      ${nextTribHtml}
+    `;
     slot.style.border = '1px dashed #7A2525';
   } else {
     const beast = BEASTS[G.lastTribCard.beast];
     const ec = ELEM_COLOR[G.lastTribCard.elem];
-    // 將天劫的執行細節轉換成小條列文字
     let logsHtml = (G.lastTribLogs || []).map(l => `<div style="margin-bottom:2px;">• ${l}</div>`).join('');
     
     slot.style.border = `1px solid ${ec}`;
@@ -2345,10 +2542,11 @@ function renderTrib() {
       <div style="font-size:9px; color:var(--text2); width:100%; text-align:left; background:rgba(0,0,0,0.3); padding:4px 6px; border-radius:4px; line-height:1.3;">
         ${logsHtml}
       </div>
+      ${nextTribHtml}
     `;
   }
 }
-
+  
 function renderScoreTrack() {
   const track = document.getElementById('score-track');
   track.innerHTML = '';
