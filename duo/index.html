@@ -267,8 +267,9 @@ body {
   transition: all .3s;
 }
 .trib-pip.filled {
-  background: #2C2C2A; border-color: #888;
-  box-shadow: 0 0 6px #C0392B44;
+  background: #000000;          /* 純黑底 */
+  border-color: var(--trib);    /* 天劫紅邊框 */
+  box-shadow: 0 0 6px #C0392B88; /* 加強紅色的光暈感 */
 }
 
 /* Supply */
@@ -373,6 +374,32 @@ body {
 #modal-box .btn { margin: 0 4px; }
 
 /* ── Animations ── */
+  /* ── 結算連線按鈕發光特效 ── */
+@keyframes scoreBtnGlow {
+  0%, 100% { 
+    box-shadow: 0 0 2px var(--gold); 
+    background: transparent;
+    text-shadow: 0 0 0 transparent;
+  }
+  50% { 
+    box-shadow: 0 0 14px var(--gold); 
+    background: rgba(212, 168, 67, 0.2);
+    text-shadow: 0 0 4px var(--gold);
+  }
+}
+  /* ── 結算連線按鈕基礎樣式 ── */
+.btn-score {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: transparent;
+  margin-right: 8px;
+}
+.btn-score-glow {
+  animation: scoreBtnGlow 1.5s ease-in-out infinite;
+  border-color: var(--gold) !important;
+  color: var(--gold) !important;
+}
+  
   /* ── 本命珠專屬特效 ── */
 @keyframes lifeOrbPulse {
   0%, 100% { filter: drop-shadow(0 0 4px var(--gold)); }
@@ -2027,9 +2054,9 @@ function renderBoard() {
         const isTarget = isOrbTargetable(ei, li, orb);
 
         if (orb.type === 'trib') {
-          c.setAttribute('fill','#2C2C2A'); 
-          c.setAttribute('stroke','#888780'); 
-          c.setAttribute('stroke-width','1');
+          c.setAttribute('fill','#000000'); 
+          c.setAttribute('stroke','var(--trib)'); // 使用您預設的煞氣紅 #C0392B
+          c.setAttribute('stroke-width','1.5');
         } else if (orb.type === 'life') {
           // ─── 【本命珠專屬樣式】 ───
           c.setAttribute('fill', 'var(--gold)'); 
@@ -2578,7 +2605,15 @@ function renderActionBar() {
   let hintText = '';
   let btnsHTML = '';
 
-  const btnScore = `<button class="btn" style="border-color:#D4A843; color:#D4A843; background:transparent; margin-right:8px;" onclick="triggerLineageScoring()">🌟 結算連線</button>`;
+ // 1. 動態偵測目前陣盤是否達成連線條件
+  const hasMatch = findLineageMatch() !== null;
+  
+  // 2. 套用剛剛寫好的 btn-score，並根據條件決定是否疊加發光特效
+  const scoreBtnClass = hasMatch ? 'btn btn-score btn-score-glow' : 'btn btn-score';
+
+  // 3. 乾淨俐落的 HTML 字串，樣式全交給 CSS 管理
+  const btnScore = `<button class="${scoreBtnClass}" onclick="triggerLineageScoring()">🌟 結算連線</button>`;
+  
   const btnSkip = `<button class="btn btn-ghost" onclick="skipSpellPhase()">跳過法術階段</button>`;
   const btnEnd = `<button class="btn btn-primary" onclick="endTurn()">結束回合</button>`;
   const btnEndDisabled = `<button class="btn btn-primary" disabled>結束回合</button>`;
@@ -2596,7 +2631,6 @@ function renderActionBar() {
     hintText = '召喚階段：點選手牌放置祭壇，或結算連線。';
     btnsHTML = btnScore + btnEndDisabled;
   } else if (G.phase === 'end') {
-    // 【修改點】在結束階段的兩種手牌狀態下，皆注入 btnScore 按鈕
     if (G.hand.length < 3 && G.summonDeck.length > 0) {
       hintText = '結束階段：手牌不足 3 張，請從右側「召喚供給區」點選 1 張加入手牌。';
       btnsHTML = btnScore + btnEndDisabled; 
