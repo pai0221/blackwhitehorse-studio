@@ -1016,13 +1016,13 @@ function onBoardElemClick(elemIdx, layerIdx, clickedOrb) {
     }
   }
 
-  // ─── 6. 攔截：生剋結算的目標選擇 ───
+// ─── 6. 攔截：生剋結算的目標選擇 ───
   if (G.pendingEffects && G.pendingEffects.length > 0) {
-    const clickedElem = ELEM[elemIdx];
-    const effectIndex = G.pendingEffects.findIndex(e => e.elem === clickedElem);
+    if (G.selectedEffectIdx === undefined) G.selectedEffectIdx = 0;
+    const effect = G.pendingEffects[G.selectedEffectIdx];
     
-    if (effectIndex === -1) {
-      addLog(`點錯了！目前沒有關於 ${ELEM_CHAR[clickedElem]}屬性 的結算動作。`, 'bad');
+    if (ELEM[elemIdx] !== effect.elem) {
+      addLog(`點錯了！請點擊 ${ELEM_CHAR[effect.elem]}屬性 的珠子來結算當前選取的動作。`, 'bad');
       return;
     }
     
@@ -1031,17 +1031,22 @@ function onBoardElemClick(elemIdx, layerIdx, clickedOrb) {
       return;
     }
 
-    const effect = G.pendingEffects.splice(effectIndex, 1)[0];
-    
+    // ─── 【修復核心】：加入成功判定，防止幽靈連擊吞噬動作 ───
+    let success = false;
     if (effect.type === 'inward') {
-      moveOrbInwardSpecific(elemIdx, layerIdx, clickedOrb);
-      addLog(`結算完成：${effect.desc}，珠子跨層向內進。`);
+      success = moveOrbInwardSpecific(elemIdx, layerIdx, clickedOrb);
+      if (success) addLog(`結算完成：${effect.desc}，珠子跨層向內進。`, 'good');
     } else {
-      moveOrbOutwardSpecific(elemIdx, layerIdx, clickedOrb);
-      addLog(`結算完成：${effect.desc}，珠子跨層向外退。`);
+      success = moveOrbOutwardSpecific(elemIdx, layerIdx, clickedOrb);
+      if (success) addLog(`結算完成：${effect.desc}，珠子跨層向外退。`, 'good');
     }
     
-    processNextEffect();
+    // 只有確實執行了位移，才將這個動作從佇列中移除
+    if (success) {
+      G.pendingEffects.splice(G.selectedEffectIdx, 1);
+      G.selectedEffectIdx = 0; // 重置回第一個動作
+      processNextEffect();
+    }
     return;
   }
 
@@ -1132,6 +1137,12 @@ function resolveAltarLinkage(placedSlotIdx, placedElem) {
   processNextEffect();
 }
 
+// ─── 【新增】玩家手動選擇要先結算哪一個效果 ───
+function selectPendingEffect(idx) {
+  G.selectedEffectIdx = idx;
+  renderAll();
+}
+  
 function processNextEffect() {
   let i = 0;
   while (i < G.pendingEffects.length) {
@@ -1167,13 +1178,16 @@ function processNextEffect() {
     renderAll();
     return;
   }
-  // ─────────────────────────────────────────
+  // ─── 【新增】：預設選取第一個效果 ───
+  if (G.selectedEffectIdx === undefined || G.selectedEffectIdx >= G.pendingEffects.length) {
+    G.selectedEffectIdx = 0;
+  }
   
   const effectDescList = G.pendingEffects.map(e => 
     `${ELEM_CHAR[e.elem]}屬(${e.type === 'inward' ? '進' : '退'})`
   ).join('、');
   
-  addLog(`【等待結算】請點擊陣盤選擇結算順序。待處理：${effectDescList}`, 'warn');
+  addLog(`【等待結算】請在下方按鈕選擇動作，並點擊陣盤目標。待處理：${effectDescList}`, 'warn');
   renderAll();
 }
 
@@ -1916,10 +1930,11 @@ function isOrbTargetable(ei, li, orb) {
   if (G.tribPending && G.tribPending.action === 'restrain') {
     return ei === ELEM.indexOf(G.tribPending.elem) && li === G.tribPending.layer && orb.owner === 'player';
   }
-  // 3. 生剋結算 (只亮當前要結算之屬性上的珠子)
+  // 3. 生剋結算 (只亮當前選取動作之屬性上的珠子)
   if (G.pendingEffects && G.pendingEffects.length > 0) {
-    const effectElems = G.pendingEffects.map(e => ELEM.indexOf(e.elem));
-    return effectElems.includes(ei);
+    if (G.selectedEffectIdx === undefined || G.selectedEffectIdx >= G.pendingEffects.length) return false;
+    const currentEffectElem = G.pendingEffects[G.selectedEffectIdx].elem;
+    return ei === ELEM.indexOf(currentEffectElem);
   }
   // 4. 神獸 / 法術 指定目標
   if (G.beastPending && G.beastPending.step === 1) return true; // 青龍玄武發動中，全盤珠子皆可選
@@ -2602,6 +2617,19 @@ function renderPhaseIndicator() {
 
 function renderActionBar() {
   const bar = document.getElementById('action-bar');
+  // ─── 【新增】：如果正在結算生剋，將動作列變為按鈕選項 ───
+  if (G.pendingEffects && G.pendingEffects.length > 0) {
+    let btnsHTML = '';
+    G.pendingEffects.forEach((eff, idx) => {
+      const isSelected = (G.selectedEffectIdx === idx);
+      const btnClass = isSelected ? 'btn btn-primary' : 'btn btn-ghost';
+      const text = `${ELEM_CHAR[eff.elem]}屬(${eff.type==='inward'?'進':'退'})`;
+      btnsHTML += `<button class="${btnClass}" onclick="selectPendingEffect(${idx})" style="margin-right:6px;">${text}</button>`;
+    });
+    
+    bar.innerHTML = `<span id="action-hint" style="flex:1; font-size:11px; color:var(--text); font-weight:bold;">【策略抉擇】請點擊選擇動作，再點選陣盤目標：</span><div style="display:flex; flex-wrap:wrap;">${btnsHTML}</div>`;
+    return;
+  }
   let hintText = '';
   let btnsHTML = '';
 
