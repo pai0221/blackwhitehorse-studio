@@ -568,6 +568,12 @@ body {
 /* ═══════════════════════════════════════════════════════════
    CONSTANTS
 ═══════════════════════════════════════════════════════════ */
+  const WIN_SCORE = {
+  easy: 20,
+  normal: 15,
+  hard: 10
+};
+  
 const ELEM = ['wood','fire','earth','metal','water'];
 const ELEM_CHAR = {wood:'木',fire:'火',earth:'土',metal:'金',water:'水'};
 const ELEM_COLOR = {wood:'#7DB33A',fire:'#D94040',earth:'#C88A1A',metal:'#A09E96',water:'#4A8FCC'};
@@ -608,7 +614,10 @@ const SPELLS_DATA = {
   function changeDifficulty() {
   const sel = document.getElementById('difficulty-select');
   G.difficulty = sel.value;
+  G.targetScore = WIN_SCORE[G.difficulty]; // 【新增】同步更新目標分數
   addLog(`⚙️ 遊戲難度已切換為：${sel.options[sel.selectedIndex].text}`, 'important');
+    // 更新右上角的 UI 顯示
+  document.getElementById('score-label').textContent = `分 / ${G.targetScore}`;
   renderAll(); // 【新增】切換難度後立刻刷新畫面
 }
   
@@ -622,6 +631,7 @@ function initGame() {
   const currentDiff = G.difficulty || 'normal';
   G = {
     difficulty: currentDiff, // 'easy', 'normal', 'hard'
+    targetScore: WIN_SCORE[currentDiff], // 【新增】寫入當前難度的過關分數
     peekedNextTrib: false, // 【新增】記錄本回合是否已窺探天機
     phase: 'setup_life', 
     round: 1,
@@ -806,7 +816,7 @@ function handleOrbEntry(elemIdx, type, owner) {
 
 function gainScore(pts) {
   G.score += pts;
-  if (G.score >= 20) triggerVictory();
+  if (G.score >= G.targetScore) triggerVictory();
 }
 
 function setPhase(p) {
@@ -2592,7 +2602,8 @@ function renderTrib() {
 function renderScoreTrack() {
   const track = document.getElementById('score-track');
   track.innerHTML = '';
-  for (let i = 0; i <= 20; i++) {
+  // 【修改】迴圈上限從 20 改為 G.targetScore
+  for (let i = 0; i <= G.targetScore; i++) {
     const n = document.createElement('div');
     let cls = 'score-node';
     if (i < G.score)  cls += ' passed';
