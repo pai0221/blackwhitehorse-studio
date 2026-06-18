@@ -5,6 +5,33 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>四象奇門 · 天劫降臨</title>
 <style>
+  /* ── 規則秘笈彈窗樣式 ── */
+#help-modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.85); z-index: 300;
+  align-items: center; justify-content: center;
+  backdrop-filter: blur(3px);
+}
+#help-modal-overlay.show { display: flex; animation: fadeIn 0.2s ease-out; }
+#help-modal-box {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--r-xl); padding: 20px 24px; max-width: 500px; width: 90%;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+#help-content {
+  text-align: left; max-height: 65vh; overflow-y: auto;
+  padding-right: 10px; font-size: 12px; line-height: 1.6;
+}
+#help-content::-webkit-scrollbar { width: 4px; }
+#help-content::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+.help-section {
+  margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--border);
+}
+.help-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.help-title {
+  color: var(--text); font-size: 14px; font-weight: 700; margin-bottom: 6px;
+}
+.help-section p { color: var(--text2); margin-bottom: 4px; }
 /* ── 祭壇生剋預覽特效 ── */
 .altar-cell { position: relative; }
 
@@ -439,7 +466,9 @@ body {
         <option value="normal" selected>一般 (共鳴+1劫珠)</option>
         <option value="hard">困難 (依共鳴張數加劫珠)</option>
       </select>
+      <button class="btn btn-ghost" onclick="openHelp()" style="padding:2px 8px;">📜 規則</button>
     </div>
+    
     <div id="phase-indicator">
       <span class="phase-badge" id="pb-spell">法術</span>
       <span style="color:var(--border2)">›</span>
@@ -564,7 +593,85 @@ body {
   </div>
 </div>
 
+<!-- 2. 在 </body> 標籤前，新增「規則秘笈」的彈窗結構 -->
+<div id="help-modal-overlay" onclick="if(event.target===this) closeHelp()">
+  <div id="help-modal-box">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:10px;">
+      <h2 style="color:var(--gold); font-family:'Noto Serif TC', serif; font-size:18px;">📜 四象奇門 · 陣法秘笈</h2>
+      <button class="btn btn-ghost" onclick="closeHelp()" style="padding:4px 8px; font-size:12px;">✕</button>
+    </div>
+    <div id="help-content">
+      
+      <div class="help-section">
+        <div class="help-title">🎯 勝負條件</div>
+        <p><b>渡劫飛升：</b> 透過珠子入界、學習法術、完成連線獲得分數，達到當前難度的「目標分數」即獲勝。</p>
+        <p><b>道心崩潰：</b> 只要有 <b style="color:var(--trib);">3 顆「劫珠」(黑底紅邊)</b> 被擠入最中央的虛空界內，即刻宣告失敗。</p>
+        陣盤每格<b style="color:var(--trib);">最多只能容納 1 顆劫珠</b>！
+      </div>
+
+      <div class="help-section">
+        <div class="help-title">🔄 回合流程</div>
+        <ol style="margin-left:20px; color:var(--text2);">
+          <li><b>法術階段：</b> 學習法術、消耗靈力施展法術、發動祭壇神獸威能。</li>
+          <li><b>召喚階段：</b> 點選手牌打入「召喚祭壇」，於陣盤產生對應屬性的「一般珠」。</li>
+          <li><b>天劫降臨：</b> 回合結束時，系統自動降下劫珠。若祭壇神獸產生共鳴（同屬性），天劫將加倍狂暴！</li>
+        </ol>
+      </div>
+
+<div class="help-section">
+        <div class="help-title">📜 法術學習條件</div>
+        <p>在法術階段，若滿足條件，點擊右側「法術供給區」的法術牌即可習得並獲得分數。學習條件分為兩種（卡牌右側有提示）：</p>
+        <ul style="margin-left:20px; color:var(--text2);">
+          <li><b>精煉消耗：</b> 需扣除右側「精煉爐」中對應屬性的精煉值。例如「木精煉 2」代表需消耗 2 點木屬性精煉。</li>
+          <li><b>陣法共鳴：</b> 無需消耗資源，但「召喚祭壇」上必須<b>同時存在</b>法術要求的屬性組合。例如要求「水、木、木、火」，您的祭壇就必須剛好有這些屬性的神獸坐鎮方可習得。</li>
+        </ul>
+      </div>
+      
+      <div class="help-section">
+        <div class="help-title">☯️ 五行生剋與精煉</div>
+        <p>打出召喚牌時，會與祭壇相鄰的舊牌產生陣法聯動：</p>
+        <ul style="margin-left:20px; color:var(--text2);">
+          <li><b>相生 (木生火生土生金生水)：</b> 牽引珠子向內層 <b style="color:var(--wood-light)">推進</b>（往入界區靠近）。</li>
+          <li><b>相剋 (木剋土剋水剋火剋金)：</b> 將珠子向外層 <b style="color:var(--fire-light)">逼退</b>。若我方珠被逼出界外可得靈力；若將劫珠逼出則直接消散！</li>
+          <li><b>同屬精煉：</b> 不發生位移，改為提升右側「精煉爐」數值。滿 3 階大成將自動降下相生屬性的珠子。</li>
+        </ul>
+      </div>
+<div class="help-section">
+        <div class="help-title">🌟 陣法連線 (得分與淨化)</div>
+        <p>當您的珠子（包含一般珠與本命珠）在五行陣盤上達成特定排列時，按鈕將會發光，此時可點擊<b>「🌟 結算連線」</b>：</p>
+        <ul style="margin-left:20px; color:var(--text2); margin-bottom:8px;">
+          <li><b>縱列貫通：</b> 單一屬性的「第2層、第3層、第4層」皆有我方珠子。</li>
+          <li><b>內圈 (第2層) 連線：</b> 連續 <b>2 個</b>相鄰屬性皆有我方珠子。</li>
+          <li><b>中圈 (第3層) 連線：</b> 連續 <b>3 個</b>相鄰屬性皆有我方珠子。</li>
+          <li><b>外圈 (第4層) 連線：</b> 連續 <b>4 個</b>相鄰屬性皆有我方珠子。</li>
+          <li><b>一般珠入界：</b> 獲得 <b>1 分</b>及<b>1 靈力</b>。</li>
+        </ul>
+        <p><b>💎 連線獎勵：</b> 獲得 <b>3 分</b>（若有相關法術或精煉可額外加分），並觸發「淨化機制」，可點擊消除連線屬性中的 1 顆劫珠！</p>
+        <p><b>🛡️ 本命不滅：</b> 結算後，參與連線的「一般珠」將被消耗；但若連線中包含<b>「本命珠」</b>，本命珠將穩固陣眼，<b>不會被消耗</b>，可持續為您下一次連線佈局！</p>
+  <p><b>物極必反：</b> <b>「本命珠」</b>受五行生剋推擠時，若向內推進卻「無路可進」（已達最內層或內層客滿），將<b>向外反彈</b>；反之，若向外逼退卻「退無可退」，則會<b>向內反彈</b>。
+      </div>
+      <div class="help-section">
+        <div class="help-title">✨ 淨化機制</div>
+        <p><b>化解天劫 (淨化)：</b> 獲取分數的同時，還能觸發強大的「淨化」機制來消除劫珠。根據觸發方式，可淨化的範圍有所不同：</p>
+        <ul style="margin-left:20px; color:var(--text2);">
+          <li style="margin-bottom:4px;"><b>入界淨化：</b> 將一般珠成功推入界內時，可點擊消除 <b style="color:var(--gold);">全盤任意位置</b> 的 1 顆劫珠，威力最廣！</li>
+          <li><b>連線淨化：</b> 達成陣法連線時，可點擊消除 <b style="color:var(--gold);">該次連線涉及屬性</b> 範圍內的 1 顆劫珠。</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+</div>
+  
 <script>
+  /* ── 規則秘笈操作 ── */
+function openHelp() {
+  document.getElementById('help-modal-overlay').classList.add('show');
+}
+
+function closeHelp() {
+  document.getElementById('help-modal-overlay').classList.remove('show');
+}
 /* ═══════════════════════════════════════════════════════════
    CONSTANTS
 ═══════════════════════════════════════════════════════════ */
