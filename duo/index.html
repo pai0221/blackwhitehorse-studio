@@ -910,19 +910,39 @@ function handleOrbEntry(elemIdx, type, owner) {
       addLog('萬法歸一：額外 +1分', 'good');
     }
 
-    // ─── 【核心注入：入界淨化機制】 ───
-    // 入界淨化可以點擊「全盤任意位置」的劫珠，所以把 0,1,2,3,4（所有屬性編號）都塞進允許清單
-    G.purifyQueue.push({ 
-      type: 'entry', 
-      elems: [0, 1, 2, 3, 4] 
-    });
-    
-    addLog(`✨ 觸發「入界淨化」：請點擊盤面上任意位置的 1 顆劫珠將其消除！`, 'good');
+    // ─── 【新增防呆】：掃描全盤是否有劫珠 ───
+    let hasAnyTrib = false;
+    for (let e = 0; e < 5; e++) {
+      for (let l = 0; l < 4; l++) {
+        if (G.board[e][l].some(o => o.type === 'trib')) hasAnyTrib = true;
+      }
+    }
+
+    if (hasAnyTrib) {
+      G.purifyQueue.push({ 
+        type: 'entry', 
+        elems: [0, 1, 2, 3, 4] 
+      });
+      addLog(`✨ 觸發「入界淨化」：請點擊盤面上任意位置的 1 顆劫珠將其消除！`, 'good');
+    } else {
+      addLog(`✨ 陣法清明！盤面上無劫珠可淨化，靈力回歸天地。`, 'warn');
+    }
   }
 }
 
 function gainScore(pts) {
+  const oldScore = G.score;
   G.score += pts;
+  
+  // ─── 【新增】：偵測 5、10、15 分里程碑 ───
+  [5, 10, 15].forEach(m => {
+    // 確保只有在剛好跨過門檻的那一刻觸發
+    if (oldScore < m && G.score >= m) {
+      G.purifyQueue.push({ type: 'milestone', val: m });
+      addLog(`🌟 境界突破達到 ${m} 分！獲得「天道賜福」一次。`, 'important');
+    }
+  });
+
   if (G.score >= G.targetScore) triggerVictory();
 }
 
@@ -994,16 +1014,42 @@ function onBoardElemClick(elemIdx, layerIdx, clickedOrb) {
   // ─── 1. 攔截：淨化劫珠 ───
   if (G.purifyQueue && G.purifyQueue.length > 0) {
     const task = G.purifyQueue[0];
+    // 【新增】：處理「天道賜福」的生成獎勵
+    if (task.type === 'milestone') {
+      placeOrbAtChaos(elemIdx); // 產生一顆一般珠，降落邏輯比照打牌
+      addLog(`✨ 天道賜福！於 ${ELEM_CHAR[ELEM[elemIdx]]}屬 凝聚了 1 顆一般珠。`, 'good');
+      
+      G.purifyQueue.shift(); // 移除任務
+      
+      // 檢查是否還有後續強制任務 (例如連線同時跨越里程碑，會排隊觸發)
+      if (G.purifyQueue.length > 0) {
+        if (G.purifyQueue[0].type === 'milestone') addLog('還有境界突破獎勵，請繼續點擊陣盤任一屬性！', 'warn');
+        else addLog('請繼續點擊劫珠進行淨化。', 'warn');
+      } else if (G.pendingEffects && G.pendingEffects.length > 0) {
+        processNextEffect();
+      }
+      renderAll();
+      return;
+    }
     if (!clickedOrb || clickedOrb.type !== 'trib') { addLog('請精準點擊一顆【劫珠】來進行淨化！', 'bad'); return; }
     if (!task.elems.includes(elemIdx)) { addLog('淨化只能選擇剛才連線涉及屬性（或入界）上的劫珠！', 'bad'); return; }
     
-    const orbs = G.board[elemIdx][layerIdx];
+   const orbs = G.board[elemIdx][layerIdx];
     orbs.splice(orbs.indexOf(clickedOrb), 1);
     addLog(`淨化成功！消除了 ${ELEM_CHAR[ELEM[elemIdx]]}屬 的 1 顆劫珠。`, 'good');
     
     G.purifyQueue.shift();
-    if (G.purifyQueue.length > 0) addLog('還有淨化次數，請繼續點擊劫珠。', 'warn');
-    else if (G.pendingEffects.length > 0) processNextEffect();
+    
+    // ✅ 預判下一個任務是什麼，給予精確的文字引導
+    if (G.purifyQueue.length > 0) {
+      if (G.purifyQueue[0].type === 'milestone') {
+        addLog('✨ 還有境界突破獎勵！請點擊陣盤任一屬性來凝聚一般珠。', 'warn');
+      } else {
+        addLog('還有淨化次數，請繼續點擊劫珠。', 'warn');
+      }
+    } else if (G.pendingEffects && G.pendingEffects.length > 0) {
+      processNextEffect();
+    }
     renderAll();
     return;
   }
@@ -1757,11 +1803,36 @@ function triggerLineageScoring() {
     return;
   }
 
-  // 1. 基礎得分：增加 3 分
-  gainScore(3);
-  addLog(`🌟 完成連線！得 3分 ${match.desc}`, 'good');
+  // 取得連線涉及的屬性編號
+  const matchEIdxs = match.elems.map(e => ELEM.indexOf(e));
 
-  // 2. 額外加分：觸發法術/精煉的額外加分
+  // ─── 【新增防呆】：掃描這些屬性範圍內，是否有劫珠存在？ ───
+  let hasTribOrbs = false;
+  matchEIdxs.forEach(eIdx => {
+    for (let li = 0; li < 4; li++) {
+      if (G.board[eIdx][li].some(o => o.type === 'trib')) {
+        hasTribOrbs = true;
+      }
+    }
+  });
+
+  // ─── 【優化順序 1】：確保有劫珠，才排入「連線淨化」佇列 ───
+  if (hasTribOrbs) {
+    G.purifyQueue.push({ 
+      type: 'lineage', 
+      elems: matchEIdxs 
+    });
+  }
+
+  // ─── 【優化順序 2】：拔除參與連線的玩家珠 ───
+  match.slots.forEach(slot => {
+    removeScoringOrb(slot.eIdx, slot.lIdx);
+  });
+
+  // ─── 【優化順序 3】：基礎得分與額外加分 ───
+  addLog(`🌟 完成連線！ ${match.desc}`, 'good');
+  gainScore(3);
+
   match.elems.forEach(e => {
     const eid = ELEM.indexOf(e);
     const spellKey = ['wood_power','fire_power','earth_power','metal_power','water_power'][eid];
@@ -1776,21 +1847,13 @@ function triggerLineageScoring() {
     }
   });
 
-  // 3. 拔除珠子：移除參與連線的玩家珠（本命珠不滅）
-  match.slots.forEach(slot => {
-    removeScoringOrb(slot.eIdx, slot.lIdx);
-  });
+  // ─── 【優化順序 4】：依據掃描結果發送對應的提示 ───
+  if (hasTribOrbs) {
+    addLog(`✨ 觸發「連線淨化」：請點擊剛才連線涉及屬性上的 1 顆劫珠來將其消除！`, 'good');
+  } else {
+    addLog(`✨ 陣法清明！連線範圍內無劫珠可淨化，靈力回歸天地。`, 'warn');
+  }
 
-  // ─── 【核心注入：連線淨化機制】 ───
-  // 將這次連線涉及的屬性（例如火、土、金、水）轉成編號，推入淨化佇列
-  G.purifyQueue.push({ 
-    type: 'lineage', 
-    elems: match.elems.map(e => ELEM.indexOf(e)) 
-  });
-  
-  addLog(`✨ 觸發「連線淨化」：請點擊剛才連線涉及屬性上的 1 顆劫珠來將其消除！`, 'good');
-
-  // 重新渲染畫面，這時按鈕會自動根據網頁狀態被鎖定，直到玩家點擊淨化完畢
   renderAll();
 }
 
@@ -2035,27 +2098,36 @@ function slotPositions(ei, li) {
 }
 
   // 判斷該珠子目前是否為玩家可點擊的目標
+// 判斷該珠子目前是否為玩家可點擊的目標
 function isOrbTargetable(ei, li, orb) {
   if (!orb) return false;
   
-  // 1. 淨化劫珠
+  // 1. 淨化與天道賜福
   if (G.purifyQueue && G.purifyQueue.length > 0) {
     const task = G.purifyQueue[0];
-    return orb.type === 'trib' && task.elems.includes(ei);
+    
+    // 【修復】：如果是天道賜福，不需要高亮現有珠子，直接回傳 false 避免崩潰
+    if (task.type === 'milestone') return false; 
+    
+    // 如果是淨化，才去比對劫珠與指定屬性
+    if (task.type === 'entry' || task.type === 'lineage') {
+      return orb.type === 'trib' && task.elems.includes(ei);
+    }
   }
+  
   // 2. 天劫衝擊 (只能選受剋屬性最內層的玩家珠)
   if (G.tribPending && G.tribPending.action === 'restrain') {
     return ei === ELEM.indexOf(G.tribPending.elem) && li === G.tribPending.layer && orb.owner === 'player';
   }
-  // 3. 生剋結算 (只亮當前選取動作之屬性上的珠子)
+  // 3. 生剋結算 (只亮當前要結算之屬性上的珠子)
   if (G.pendingEffects && G.pendingEffects.length > 0) {
     if (G.selectedEffectIdx === undefined || G.selectedEffectIdx >= G.pendingEffects.length) return false;
     const currentEffectElem = G.pendingEffects[G.selectedEffectIdx].elem;
     return ei === ELEM.indexOf(currentEffectElem);
   }
   // 4. 神獸 / 法術 指定目標
-  if (G.beastPending && G.beastPending.step === 1) return true; // 青龍玄武發動中，全盤珠子皆可選
-  if (G.spellPending && G.spellPending.id === 'wood_spirit') return ei !== 0; // 木靈不能選木屬性本身
+  if (G.beastPending && G.beastPending.step === 1) return true; 
+  if (G.spellPending && G.spellPending.id === 'wood_spirit') return ei !== 0; 
   
   return false;
 }
@@ -2138,8 +2210,8 @@ function renderBoard() {
   const cc = document.createElementNS(NS,'circle');
   cc.setAttribute('cx',BCX); cc.setAttribute('cy',BCY); cc.setAttribute('r',R_ENTRY);
   cc.setAttribute('fill','#F0EDE8'); cc.setAttribute('stroke','#AAAAAA'); cc.setAttribute('stroke-width','1.2');
-  cc.style.cursor = 'pointer'; // 【新增】加入游標變化
-  cc.addEventListener('click', (e) => { e.stopPropagation(); onSpecialZoneClick('entry'); }); // 【新增】綁定入界區點擊
+  cc.style.cursor = 'pointer'; 
+  cc.addEventListener('click', (e) => { e.stopPropagation(); onSpecialZoneClick('entry'); }); 
   svg.appendChild(cc);
   
   const ct = document.createElementNS(NS,'text');
@@ -2147,11 +2219,11 @@ function renderBoard() {
   ct.setAttribute('text-anchor','middle'); ct.setAttribute('dominant-baseline','middle');
   ct.setAttribute('fill','#888'); ct.setAttribute('font-size','8');
   ct.textContent='入界區'; 
-  ct.style.cursor = 'pointer'; // 【新增】加入游標變化
-  ct.addEventListener('click', (e) => { e.stopPropagation(); onSpecialZoneClick('entry'); }); // 【新增】綁定入界區點擊
+  ct.style.cursor = 'pointer'; 
+  ct.addEventListener('click', (e) => { e.stopPropagation(); onSpecialZoneClick('entry'); }); 
   svg.appendChild(ct);
 
- // 5. 渲染實體珠子（玩家珠與劫珠）
+  // 5. 渲染實體珠子（玩家珠與劫珠）
   ELEM.forEach((elem, ei) => {
     for (let li = 0; li < 4; li++) {
       const positions = slotPositions(ei, li);
@@ -2164,17 +2236,16 @@ function renderBoard() {
           oy = positions[slot][1];
         } else {
           // 【解除限制】第 3 顆以上的「溢出珠」（青龍威能引發）
-          const base = positions[1] || positions[0]; // 以第 2 個空位為基準點
-          const overflow = slot - 1; // 記錄這是第幾顆溢出珠 (第3顆=1, 第4顆=2...)
+          const base = positions[1] || positions[0]; 
+          const overflow = slot - 1; 
           
-          // 計算切線方向，讓珠子沿著同心圓的邊緣「側向擠出」圓框外，而不影響內外層
+          // 計算切線方向，讓珠子沿著同心圓的邊緣「側向擠出」圓框外
           const dx = base[0] - BCX;
           const dy = base[1] - BCY;
           const dist = Math.sqrt(dx*dx + dy*dy);
-          const tanX = -dy / dist; // 切線 X 方向
-          const tanY = dx / dist;  // 切線 Y 方向
+          const tanX = -dy / dist; 
+          const tanY = dx / dist;  
           
-          // 將珠子往側邊推出 12 像素
           ox = base[0] + tanX * (overflow * 12);
           oy = base[1] + tanY * (overflow * 12);
         }
@@ -2187,19 +2258,16 @@ function renderBoard() {
 
         if (orb.type === 'trib') {
           c.setAttribute('fill','#000000'); 
-          c.setAttribute('stroke','var(--trib)'); // 使用您預設的煞氣紅 #C0392B
+          c.setAttribute('stroke','var(--trib)'); 
           c.setAttribute('stroke-width','1.5');
         } else if (orb.type === 'life') {
-          // ─── 【本命珠專屬樣式】 ───
           c.setAttribute('fill', 'var(--gold)'); 
           c.setAttribute('stroke', '#FFF'); 
           c.setAttribute('stroke-width', '1.5');
-          // 【修復衝突】：平時掛呼吸燈，一旦成為目標就卸下，讓 orb-target 接管
           if (!isTarget) {
             c.classList.add('life-orb-glow');
           }
         } else {
-          // 一般珠
           c.setAttribute('fill','#F0EDE8'); 
           c.setAttribute('stroke','#888780'); 
           c.setAttribute('stroke-width','1');
@@ -2210,6 +2278,7 @@ function renderBoard() {
           c.classList.add('orb-target');
         }
         
+        // ✅ 乾淨的點擊綁定，只綁定一次
         c.style.cursor='pointer';
         c.addEventListener('click', (e) => { e.stopPropagation(); onBoardElemClick(ei, li, orb); });
         svg.appendChild(c);
@@ -2218,16 +2287,13 @@ function renderBoard() {
         if (orb.type === 'life') {
           const lt = document.createElementNS(NS,'text');
           lt.setAttribute('x',ox); 
-          // 根據星星符號的視覺重心，Y軸微調一下保持完美置中
           lt.setAttribute('y',oy + 1); 
           lt.setAttribute('text-anchor','middle'); 
           lt.setAttribute('dominant-baseline','middle');
           lt.setAttribute('fill','#1A1814'); 
-          lt.setAttribute('font-family', "'Noto Sans TC', sans-serif"); // 星星符號用無襯線體會比較俐落
-          lt.setAttribute('font-size','10'); // 稍微放大一點讓星星更明顯
+          lt.setAttribute('font-family', "'Noto Sans TC', sans-serif"); 
+          lt.setAttribute('font-size','10'); 
           lt.setAttribute('font-weight','900');
-          
-          // 【核心修改】：將 '命' 改成星星符號，你也可以依喜好換成 ✦ 或 ✶
           lt.textContent = '★'; 
           
           lt.style.cursor='pointer';
@@ -2245,46 +2311,18 @@ function renderBoard() {
           ring.classList.add('anim-spin-center'); 
           ring.style.pointerEvents = 'none'; 
           
-          // ─── 【新增聯動】：本命珠成為目標時，光環變白發光，且轉速暴增！ ───
           if (isTarget) {
-            ring.style.animationDuration = '1.5s'; // 從 8s 提速到 1.5s
+            ring.style.animationDuration = '1.5s'; 
             ring.setAttribute('stroke', '#FFF');
             ring.style.filter = 'drop-shadow(0 0 4px #FFF)';
           }
-          // ────────────────────────────────────────────────────────
           
           svg.appendChild(ring);
-        }
-        
-        // ─── 【新增】：若該珠子為當前操作目標，套用發光動畫 ───
-        if (isOrbTargetable(ei, li, orb)) {
-          c.classList.add('orb-target');
-        }
-        // ───────────────────────────────────────────
-        c.style.cursor='pointer';
-        // 確保擠出框外的珠子依然可以被精準點擊
-        c.addEventListener('click', (e) => { e.stopPropagation(); onBoardElemClick(ei, li, orb); });
-        svg.appendChild(c);
-        
-        // 繪製本命珠的「命」字
-        if (orb.type === 'life') {
-          const lt = document.createElementNS(NS,'text');
-          lt.setAttribute('x',ox); lt.setAttribute('y',oy+1);
-          lt.setAttribute('text-anchor','middle'); lt.setAttribute('dominant-baseline','middle');
-         lt.setAttribute('fill','#1A1814'); 
-          lt.setAttribute('font-family', "'Noto Sans TC', sans-serif"); 
-          lt.setAttribute('font-size','10');
-          lt.setAttribute('font-weight','900');
-          lt.textContent = '★';
-          lt.style.cursor='pointer';
-          lt.addEventListener('click', (e) => { e.stopPropagation(); onBoardElemClick(ei, li, orb); });
-          svg.appendChild(lt);
         }
       });
     }
   });
 }
-
 function highlightSector(ei, on) {}
 
 /* ═══════════════════════════════════════════════════════════
@@ -2709,7 +2747,8 @@ function renderTrib() {
 function renderScoreTrack() {
   const track = document.getElementById('score-track');
   track.innerHTML = '';
-  // 【修改】迴圈上限從 20 改為 G.targetScore
+  
+  // 迴圈上限使用動態目標分數 G.targetScore
   for (let i = 0; i <= G.targetScore; i++) {
     const n = document.createElement('div');
     let cls = 'score-node';
@@ -2718,6 +2757,27 @@ function renderScoreTrack() {
     if ([5,10,15,20].includes(i)) cls += ' milestone';
     n.className = cls;
     n.textContent = i;
+
+    // ─── 【新增】：為計分軌加上動態 Tooltip 提示 ───
+    if (i === G.targetScore) {
+      // 終點提示
+      n.style.cursor = 'help';
+      n.addEventListener('mouseenter', e => showTooltip(e, {
+        name: `渡劫飛升 (${i}分)`,
+        extra: `達到此分數即可成功渡劫，逆天改命贏得勝利！`
+      }));
+      n.addEventListener('mouseleave', hideTooltip);
+    } else if ([5, 10, 15].includes(i)) {
+      // 里程碑獎勵提示
+      n.style.cursor = 'help';
+      n.addEventListener('mouseenter', e => showTooltip(e, {
+        name: `境界突破 (${i}分)`,
+        extra: `✨ 天道賜福：跨越此階段時，可於陣盤任意屬性凝聚 1 顆一般珠。`
+      }));
+      n.addEventListener('mouseleave', hideTooltip);
+    }
+    // ──────────────────────────────────────────
+
     track.appendChild(n);
   }
   document.getElementById('score-val').textContent = G.score;
