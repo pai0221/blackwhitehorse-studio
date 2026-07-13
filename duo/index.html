@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1A1814">
 <title>道DOU · 天劫降臨</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;700&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   /* ── 規則秘笈彈窗樣式 ── */
 #help-modal-overlay {
@@ -87,9 +91,6 @@
   animation: passiveGlow 2s ease-in-out infinite;
 }
   
-/* ── Fonts ── */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;700&family=Noto+Sans+TC:wght@300;400;500&display=swap');
-
 /* ── Design Tokens ── */
 :root {
   --bg:          #1A1814;
@@ -132,18 +133,19 @@ body {
   overflow-x: hidden;
 }
 
-/* ── Layout ── */
+/* ── Layout (三才陣佈局) ── */
 #app {
   display: grid;
-  grid-template-columns: 1fr 260px;
+  grid-template-columns: minmax(220px, 260px) 1fr minmax(220px, 260px); 
   grid-template-rows: auto 1fr auto;
   grid-template-areas:
-    "header header"
-    "main   right"
-    "hand   right";
+    "header header header"
+    "left   main   right"
+    "footer footer footer";
   gap: 10px;
   padding: 10px;
-  min-height: 100vh;
+  height: 100vh; 
+  overflow: hidden; 
 }
 
 /* ── Header ── */
@@ -191,45 +193,75 @@ body {
   letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px;
 }
 
-/* ── Board ── */
-#main { grid-area: main; display: flex; flex-direction: column; gap: 10px; }
-#board-card { flex: 1; }
-#boardSvg { width: 100%; display: block; cursor: default; }
-
-/* ── Player Panel ── */
-#player-panel {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+/* ── Left Column (新設：左側玩家面板) ── */
+#left-col {
+  grid-area: left;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+  overflow-y: auto; /* 允許整體滑動 */
+  height: 100%;     /* 鎖定外框高度，對齊網格 */
+  min-height: 0;    /* 防撐破核心 */
+}
+#left-col::-webkit-scrollbar { width: 4px; }
+#left-col::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+/* ── Main Column (中路：陣盤 + 祭壇 + 手牌) ── */
+#main { 
+  grid-area: main; 
+  display: flex; 
+  flex-direction: column; 
+  gap: 10px; 
+  overflow: hidden;
+}
+#board-card { 
+  flex: 1; 
+  display: flex;
+  flex-direction: column;
+  align-items: center;     
+  justify-content: center; 
+  min-height: 0;
+  position: relative; /* 關鍵：讓內部的計分與天劫資訊可以依附它定位 */
+}
+  /* ── 新增：天劫展開/收合面板的過渡效果 ── */
+details > summary {
+  list-style: none; /* 隱藏預設三角形 */
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+details[open] summary ~ * {
+  animation: fadeIn 0.2s ease-in-out;
 }
 
-/* Mana */
-#mana-gems { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
-.mana-gem {
-  width: 20px; height: 20px; border-radius: 50%;
-  background: var(--mana); border: none;
-  box-shadow: 0 0 6px #7F77DD66;
-  transition: all .2s;
+/* ── 新增：五行生剋訣專屬彈窗樣式 ── */
+#chart-modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.85); z-index: 300;
+  align-items: center; justify-content: center;
+  backdrop-filter: blur(3px);
 }
-.mana-gem.empty {
-  background: var(--bg3); border: 1px solid var(--border2);
-  box-shadow: none;
+#chart-modal-overlay.show { display: flex; animation: fadeIn 0.2s ease-out; }
+#chart-modal-box {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--r-xl); padding: 20px 24px; max-width: 400px; width: 90%;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5); text-align: center;
+}
+  
+#boardSvg { 
+  width: 100%; 
+  height: 100%;            /* 讓陣盤吃滿剩餘的垂直空間 */
+  max-height: 65vh;        /* 設定最大高度避免破版 */
+  display: block; 
+  cursor: default; 
 }
 
-/* Refinery */
-#refinery-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 5px; }
-.ref-col { display: flex; flex-direction: column; align-items: center; gap: 3px; }
-.ref-bars { display: flex; flex-direction: column-reverse; gap: 2px; }
-.ref-cell {
-  width: 20px; height: 20px; border-radius: 3px;
-  background: var(--bg3); border: 1px solid var(--border2);
-  transition: all .3s;
+/* 3. 恢復祭壇為 2x2 排列 */
+#altar-grid { 
+  display: grid; 
+  grid-template-columns: repeat(2, 1fr); /* 恢復為兩欄 */
+  gap: 6px; 
 }
-.ref-cell.filled { border: none; }
-.ref-label { font-size: 9px; font-weight: 500; }
-
-/* Altar */
-#altar-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .altar-cell {
   height: 64px; border: 1px dashed var(--border2); border-radius: var(--r-md);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -246,22 +278,42 @@ body {
   font-size: 8px; color: var(--trib);
 }
 
-/* Spells */
+/* Mana & Refinery & Spells */
+#mana-gems { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.mana-gem { width: 20px; height: 20px; border-radius: 50%; background: var(--mana); border: none; box-shadow: 0 0 6px #7F77DD66; transition: all .2s; }
+.mana-gem.empty { background: var(--bg3); border: 1px solid var(--border2); box-shadow: none; }
+
+#refinery-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 5px; }
+.ref-col { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.ref-bars { display: flex; flex-direction: column-reverse; gap: 2px; }
+.ref-cell { width: 20px; height: 20px; border-radius: 3px; background: var(--bg3); border: 1px solid var(--border2); transition: all .3s; }
+.ref-cell.filled { border: none; }
+.ref-label { font-size: 9px; font-weight: 500; }
+
 #spells-area { display: flex; gap: 5px; flex-wrap: wrap; min-height: 28px; }
-.spell-chip {
-  padding: 3px 8px; border-radius: 20px; font-size: 9px; font-weight: 500;
-  border: 1px solid var(--mana); background: var(--mana-bg); color: var(--mana);
-  cursor: pointer; transition: all .2s; position: relative;
-}
+.spell-chip { padding: 3px 8px; border-radius: 20px; font-size: 9px; font-weight: 500; border: 1px solid var(--mana); background: var(--mana-bg); color: var(--mana); cursor: pointer; transition: all .2s; position: relative; }
 .spell-chip:hover { background: var(--mana); color: #fff; }
 .spell-chip.exhausted { opacity: .4; cursor: not-allowed; }
 .spell-chip.exhausted::after { content: '（已用）'; font-size: 7px; }
 
-/* ── Hand ── */
+/* ── Hand (解除懸浮，納入中路佈局) ── */
 #hand-area {
-  grid-area: hand;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: transparent;
+  padding: 0;
+  margin-bottom: 4px; /* 留一點底邊距 */
 }
-#hand-cards { display: flex; gap: 8px; justify-content: center; padding: 4px 0; }
+#hand-cards {
+  order: 1;
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+}
 .hand-card {
   width: 58px; height: 80px; border-radius: var(--r-md);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -270,16 +322,76 @@ body {
   user-select: none;
 }
 .hand-card:hover { transform: translateY(-8px); }
-.hand-card.selected {
-  transform: translateY(-10px);
-  box-shadow: 0 0 14px currentColor;
-}
+.hand-card.selected { transform: translateY(-10px); box-shadow: 0 0 14px currentColor; }
 .hand-card .card-elem { font-size: 10px; font-weight: 600; }
 .hand-card .card-beast { font-size: 9px; }
 .hand-card .card-adj { font-size: 7px; opacity: .7; }
 
+/* ── Action Bar ── */
+#action-bar {
+  order: 2;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 16px;
+  background: var(--bg2); /* 改為實體背景，因為已經不在陣盤上了 */
+  border-radius: 30px;
+  border: 1px solid var(--border);
+  width: max-content;
+  margin: 0 auto;
+}
+#action-hint { flex: 1; font-size: 11px; color: var(--text); }
+.btn { padding: 6px 14px; border-radius: var(--r-md); border: 1px solid; font-size: 11px; font-weight: 500; cursor: pointer; transition: all .2s; font-family: 'Noto Sans TC', sans-serif; }
+.btn-primary { background: var(--gold); border-color: var(--gold); color: var(--bg); }
+.btn-primary:hover { filter: brightness(1.15); }
+.btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+.btn-ghost { background: transparent; border-color: var(--border2); color: var(--text2); }
+.btn-ghost:hover { border-color: var(--text2); color: var(--text); }
+
+/* ── Log ── */
+#log-area {
+  flex: 1; 
+  /* 🔴 關鍵 2：給予最低高度保底。當空間夠時它會自動伸展 (flex: 1)；當空間不夠時，它會挺住這 120px 的空間，並逼迫父層 #left-col 出現大捲軸 */
+  min-height: 120px; 
+  overflow-y: auto;  
+  display: block; 
+  padding: 6px 8px;
+  background: var(--bg); 
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+#log-area::-webkit-scrollbar { width: 4px; }
+#log-area::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+  
+.log-line { 
+  font-size: 10px; 
+  color: var(--text2); 
+  line-height: 1.4; 
+  margin-bottom: 4px; 
+  padding-bottom: 4px; 
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.05); 
+}
+/* 確保最後一行紀錄底部不會有留白與虛線 */
+.log-line:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.log-line.important { color: var(--text); }
+.log-line.warn  { color: #E0A040; }
+.log-line.bad   { color: var(--trib); }
+.log-line.good  { color: var(--wood); }
+
 /* ── Right Column ── */
-#right-col { grid-area: right; display: flex; flex-direction: column; gap: 10px; }
+#right-col { 
+  grid-area: right; 
+  display: flex; 
+  flex-direction: column; 
+  gap: 10px; 
+  overflow-y: auto; /* 讓右欄獨立滑動 */
+}
+#right-col::-webkit-scrollbar { width: 0px; } /* 隱藏捲軸保持美觀 */
 
 /* Trib info */
 #trib-card-slot {
@@ -334,12 +446,7 @@ body {
 .score-node.milestone { border-color: var(--gold); color: var(--gold); }
 
 /* ── Action Bar ── */
-#action-bar {
-  display: flex; gap: 8px; align-items: center;
-  padding: 8px 12px;
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: var(--r-lg); justify-content: space-between;
-}
+
 #action-hint { font-size: 11px; color: var(--text2); flex: 1; }
 .btn {
   padding: 6px 14px; border-radius: var(--r-md); border: 1px solid;
@@ -356,19 +463,6 @@ body {
 }
 .btn-ghost:hover { border-color: var(--text2); color: var(--text); }
 
-/* ── Log ── */
-#log-area {
-  max-height: 90px; overflow-y: auto;
-  display: flex; flex-direction: column-reverse; gap: 2px;
-  padding: 6px 8px;
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: var(--r-md);
-}
-.log-line { font-size: 10px; color: var(--text2); line-height: 1.4; }
-.log-line.important { color: var(--text); }
-.log-line.warn  { color: #E0A040; }
-.log-line.bad   { color: var(--trib); }
-.log-line.good  { color: var(--wood); }
 
 /* ── Tooltip ── */
 #tooltip {
@@ -452,6 +546,64 @@ body {
 
 .animate-pulse { animation: pulse 1.5s ease-in-out infinite; }
 .animate-shake { animation: shake .4s ease; }
+
+/* ── Keyboard, motion and responsive support ── */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 980px) {
+  body { overflow-y: auto; }
+  #app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto;
+    grid-template-areas: "header" "main" "left" "right" "footer";
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+  #header { align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+  #header > div:first-child { flex-wrap: wrap; }
+  #phase-indicator { width: 100%; justify-content: center; }
+  #main, #left-col, #right-col { height: auto; overflow: visible; }
+  #board-card { min-height: 620px; }
+  #boardSvg { min-height: 440px; max-height: 560px; }
+  #left-col, #right-col {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  #action-bar { width: 100%; flex-wrap: wrap; border-radius: var(--r-lg); }
+}
+
+@media (max-width: 620px) {
+  #app { gap: 8px; padding: 8px; }
+  #header h1 { width: 100%; font-size: 17px; }
+  #header > div:first-child { width: 100%; }
+  #difficulty-select { flex: 1; min-height: 38px; }
+  #board-card { min-height: 560px; padding: 6px; }
+  #boardSvg { min-height: 390px; }
+  #score-panel { left: 8px !important; width: 118px !important; }
+  #trib-panel { right: 8px !important; width: 128px !important; }
+  #left-col, #right-col { grid-template-columns: 1fr; }
+  #hand-cards { gap: 6px; overflow-x: auto; justify-content: flex-start; padding: 4px; }
+  .hand-card { min-width: 58px; }
+  #action-bar { align-items: stretch; padding: 8px; }
+  #action-bar > div { width: 100%; justify-content: center; gap: 6px; }
+  #action-hint { min-width: 100%; text-align: center; }
+  .btn { min-height: 40px; padding: 8px 12px; }
+  #tooltip { display: none !important; }
+}
 </style>
 </head>
 <body>
@@ -466,6 +618,8 @@ body {
         <option value="normal" selected>一般 (共鳴+1劫珠)</option>
         <option value="hard">困難 (依共鳴張數加劫珠)</option>
       </select>
+      <!-- 新增：五行生剋訣按鈕 -->
+      <button class="btn btn-ghost" onclick="openChart()" style="padding:2px 8px; color:var(--gold); border-color:var(--gold);">☯️ 生剋訣</button>
       <button class="btn btn-ghost" onclick="openHelp()" style="padding:2px 8px;">📜 規則</button>
     </div>
     
@@ -476,190 +630,107 @@ body {
       <span style="color:var(--border2)">›</span>
       <span class="phase-badge" id="pb-end">結束</span>
     </div>
-    <div id="score-display">
-      <div>
-        <div id="score-val">1</div>
-        <div id="score-label">分 / 20</div>
-      </div>
-    </div>
   </header>
 
-  <!-- Main -->
-  <main id="main">
-    <!-- Board -->
-    <div class="card" id="board-card">
-      <div class="card-title">五行陣盤</div>
-      <svg id="boardSvg" viewBox="0 0 460 420"></svg>
+  <!-- Left Column: 玩家面板 -->
+  <div id="left-col">
+    <div class="card">
+      <div class="card-title">靈力槽</div>
+      <div id="mana-gems"></div>
+      <div style="font-size:9px;color:var(--text3);margin-top:3px; margin-bottom:12px;" id="mana-label">0/5</div>
+      
+      <div class="card-title">召喚祭壇</div>
+      <div id="altar-grid" style="margin-bottom: 12px;">
+        <div class="altar-cell" data-slot="0" onclick="onAltarClick(0)"><span style="font-size:10px;color:var(--text3)">空格</span></div>
+        <div class="altar-cell" data-slot="1" onclick="onAltarClick(1)"><span style="font-size:10px;color:var(--text3)">空格</span></div>
+        <div class="altar-cell" data-slot="2" onclick="onAltarClick(2)"><span style="font-size:10px;color:var(--text3)">空格</span></div>
+        <div class="altar-cell" data-slot="3" onclick="onAltarClick(3)"><span style="font-size:10px;color:var(--text3)">空格</span></div>
+      </div>
+
+      <div class="card-title">已學法術</div>
+      <div id="spells-area"><span style="font-size:9px;color:var(--text3)">—</span></div>
     </div>
 
-    <!-- Player panel -->
-    <div id="player-panel">
-      <!-- Left: mana + altar -->
-      <div class="card">
-        <div style="display:grid;grid-template-columns:auto 1fr;gap:12px">
-          <div>
-            <div class="card-title">靈力槽</div>
-            <div id="mana-gems"></div>
-            <div style="font-size:9px;color:var(--text3);margin-top:3px" id="mana-label">0/5</div>
-          </div>
-          <div>
-            <div class="card-title">召喚祭壇</div>
-            <div id="altar-grid">
-              <div class="altar-cell" data-slot="0" onclick="onAltarClick(0)"><span style="font-size:10px;color:var(--text3)">空格</span></div>
-              <div class="altar-cell" data-slot="1" onclick="onAltarClick(1)"><span style="font-size:10px;color:var(--text3)">空格</span></div>
-              <div class="altar-cell" data-slot="2" onclick="onAltarClick(2)"><span style="font-size:10px;color:var(--text3)">空格</span></div>
-              <div class="altar-cell" data-slot="3" onclick="onAltarClick(3)"><span style="font-size:10px;color:var(--text3)">空格</span></div>
-            </div>
-          </div>
+    <!-- Refinery & Log -->
+    <div class="card" style="flex: 1; display: flex; flex-direction: column; min-height:0;">
+      <div class="card-title">精煉爐</div>
+      <div id="refinery-grid" style="margin-bottom: 12px;"></div>
+
+      <div class="card-title" style="margin-top: 4px;">回合記錄</div>
+      <div id="log-area" role="log" aria-live="polite" aria-relevant="additions"></div>
+    </div>
+  </div>
+
+  <!-- Main Column: 核心戰場 -->
+  <main id="main">
+    <div class="card" id="board-card">
+      
+      <!-- 🌟 新佈局：左上角計分軌道 (懸浮) -->
+      <div id="score-panel" style="position: absolute; left: 14px; top: 14px; width: 140px; z-index: 10;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:6px;">
+          <div class="card-title" style="margin:0;">計分軌道</div>
+          <div style="font-size:10px; color:var(--text2);"><span id="score-val" style="font-size:16px; font-weight:bold; color:var(--gold);">0</span> / <span id="score-label" style="font-size:10px;">15</span></div>
         </div>
-        <div style="margin-top:10px">
-          <div class="card-title">已學法術</div>
-          <div id="spells-area"><span style="font-size:9px;color:var(--text3)">—</span></div>
-        </div>
+        <div id="score-track" style="background:rgba(26,24,20,0.6); padding:6px; border-radius:8px; backdrop-filter:blur(2px);"></div>
       </div>
 
-      <!-- Right: refinery + log -->
-      <div class="card">
-        <div class="card-title">精煉爐</div>
-        <div id="refinery-grid"></div>
-
-        <div style="margin-top:10px">
-          <div class="card-title">回合記錄</div>
-          <div id="log-area"></div>
+      <!-- 🌟 新佈局：右上角天劫資訊 (常駐摘要 + 展開收合的詳細推演) -->
+      <div id="trib-panel" style="position: absolute; right: 14px; top: 14px; width: 150px; z-index: 10; text-align:right;">
+        <div class="card-title" style="margin-bottom:6px;">天劫入侵狀態</div>
+        <div id="trib-orb-track" style="display: flex; justify-content: flex-end; align-items: center; background:rgba(26,24,20,0.6); padding:6px; border-radius:8px; backdrop-filter:blur(2px);"></div>
+        
+        <!-- 常駐顯示：當前劫與下一劫 -->
+        <div id="trib-summary" style="margin-top:6px; background:rgba(26,24,20,0.6); padding:8px; border-radius:8px; backdrop-filter:blur(2px); text-align:center;">
+          <span style="font-size:10px;color:var(--text3)">（天劫回合後顯示）</span>
         </div>
+
+        <!-- 展開收合的詳細資訊 -->
+        <details style="margin-top: 6px; text-align:center; background:rgba(33,31,26,0.85); border:1px solid var(--border2); border-radius:6px; backdrop-filter:blur(4px);">
+          <summary style="cursor: pointer; font-size:10px; padding:6px; color:var(--text2); font-weight:bold;">▼ 詳細降劫推演</summary>
+          <div id="trib-logs" style="padding: 0 8px 8px 8px; font-size:9px; color:var(--text2); text-align:left;">
+            尚無天劫紀錄
+          </div>
+        </details>
       </div>
+
+      <svg id="boardSvg" viewBox="0 0 460 420" role="img" aria-label="五行天劫陣盤"></svg>
+    </div>
+
+    <!-- Hand & Actions -->
+    <div id="hand-area">
+      <div id="action-bar">
+        <span id="action-hint">選擇一張手牌打出，或先使用法術 / 神獸威能。</span>
+        <button class="btn btn-ghost" id="btn-skip-spell" onclick="skipSpellPhase()">跳過法術階段</button>
+        <button class="btn btn-primary" id="btn-end-turn" onclick="endTurn()" disabled>結束回合</button>
+      </div>
+      <div id="hand-cards"></div>
     </div>
   </main>
 
-  <!-- Hand -->
-  <div class="card" id="hand-area">
-    <div id="action-bar">
-      <span id="action-hint">選擇一張手牌打出，或先使用法術 / 神獸威能。</span>
-      <button class="btn btn-ghost" id="btn-skip-spell" onclick="skipSpellPhase()">跳過法術階段</button>
-      <button class="btn btn-primary" id="btn-end-turn" onclick="endTurn()" disabled>結束回合</button>
-    </div>
-    <div id="hand-cards"></div>
-  </div>
-
-  <!-- Right column -->
+  <!-- Right Column: 極簡化，僅保留供給區 -->
   <div id="right-col">
-    <!-- 👇 新增：五行生剋陣圖 👇 -->
-    <div class="card">
-      <div class="card-title">五行生剋訣</div>
-      <div style="display:flex; justify-content:center; align-items:center; padding: 4px 0;">
-        <svg viewBox="0 0 120 115" style="width:100%; max-width:150px; overflow:visible;">
-          <!-- 定義箭頭標記 -->
-          <defs>
-            <!-- 相生金線箭頭 -->
-            <marker id="arrow-gen" viewBox="0 0 10 10" refX="24" refY="5" markerWidth="5" markerHeight="5" orient="auto">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--gold)" opacity="0.8"/>
-            </marker>
-            <!-- 相剋紅線箭頭 -->
-            <marker id="arrow-res" viewBox="0 0 10 10" refX="24" refY="5" markerWidth="5" markerHeight="5" orient="auto">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--trib)" opacity="0.8"/>
-            </marker>
-          </defs>
-
-          <!-- 相生連線 (外圈圓環，拆分成獨立線段確保每個箭頭都顯示) -->
-          <g fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-dasharray="3 2" style="opacity:0.6;" marker-end="url(#arrow-gen)">
-            <line x1="60" y1="10" x2="108" y2="45" />  <!-- 木生火 -->
-            <line x1="108" y1="45" x2="89" y2="100" /> <!-- 火生土 -->
-            <line x1="89" y1="100" x2="31" y2="100" /> <!-- 土生金 -->
-            <line x1="31" y1="100" x2="12" y2="45" />  <!-- 金生水 -->
-            <line x1="12" y1="45" x2="60" y2="10" />   <!-- 水生木 -->
-          </g>
-          
-          <!-- 相剋連線 (內圈五芒星，拆分成獨立線段確保每個箭頭都顯示) -->
-          <g fill="none" stroke="var(--trib)" stroke-width="1.5" style="opacity:0.7;" marker-end="url(#arrow-res)">
-            <line x1="60" y1="10" x2="89" y2="100" />  <!-- 木剋土 -->
-            <line x1="89" y1="100" x2="12" y2="45" />  <!-- 土剋水 -->
-            <line x1="12" y1="45" x2="108" y2="45" />  <!-- 水剋火 -->
-            <line x1="108" y1="45" x2="31" y2="100" /> <!-- 火剋金 -->
-            <line x1="31" y1="100" x2="60" y2="10" />  <!-- 金剋木 -->
-          </g>
-          
-          <!-- 屬性節點 (圓圈與文字) -->
-          <!-- 木 -->
-          <circle cx="60" cy="10" r="11" fill="var(--bg)" stroke="var(--wood)" stroke-width="2"/>
-          <text x="60" y="11" fill="var(--wood)" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="middle">木</text>
-          <!-- 火 -->
-          <circle cx="108" cy="45" r="11" fill="var(--bg)" stroke="var(--fire)" stroke-width="2"/>
-          <text x="108" y="46" fill="var(--fire)" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="middle">火</text>
-          <!-- 土 -->
-          <circle cx="89" cy="100" r="11" fill="var(--bg)" stroke="var(--earth)" stroke-width="2"/>
-          <text x="89" y="101" fill="var(--earth)" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="middle">土</text>
-          <!-- 金 -->
-          <circle cx="31" cy="100" r="11" fill="var(--bg)" stroke="var(--metal)" stroke-width="2"/>
-          <text x="31" y="101" fill="var(--metal)" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="middle">金</text>
-          <!-- 水 -->
-          <circle cx="12" cy="45" r="11" fill="var(--bg)" stroke="var(--water)" stroke-width="2"/>
-          <text x="12" y="46" fill="var(--water)" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="middle">水</text>
-        </svg>
-      </div>
-      <!-- 圖例說明 -->
-      <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text2); margin-top:8px; padding:0 4px;">
-        <span style="display:flex; align-items:center; gap:4px;"><span style="color:var(--gold); letter-spacing:-2px;">- - -</span> 相生 (向內推)</span>
-        <span style="display:flex; align-items:center; gap:4px;"><span style="color:var(--trib); font-weight:bold;">──</span> 相剋 (向外退)</span>
-      </div>
-    </div>
-    <!-- 👆 新增結束 👆 -->
-    <!-- Trib -->
-    <div class="card">
-      <div class="card-title">天劫資訊</div>
-      <div id="trib-card-slot">
-        <span style="font-size:10px;color:var(--text3)">（天劫回合後顯示）</span>
-      </div>
-      <div style="margin-top:6px;font-size:9px;color:var(--text2)">劫珠入界（3顆即失敗）</div>
-      <div id="trib-orb-track"></div>
-      <div style="display:flex;flex-direction:column;gap:3px;margin-top:8px">
-        <span style="font-size:9px;padding:2px 7px;border-radius:20px;background:#1A2A12;color:#7DB33A;border:1px solid #3A5A1A;width:fit-content">渡劫 → 20分勝利</span>
-        <span style="font-size:9px;padding:2px 7px;border-radius:20px;background:#2A1010;color:#D94040;border:1px solid #5A2020;width:fit-content">道心侵蝕 → 3珠入界</span>
-      </div>
-    </div>
-
-    <!-- Score track -->
-    <div class="card">
-      <div class="card-title">計分軌道</div>
-      <div id="score-track"></div>
-    </div>
-
-    <!-- Summon supply -->
     <div class="card">
       <div class="card-title">召喚供給區</div>
       <div id="summon-supply"></div>
       <div style="font-size:8px;color:var(--text3);text-align:center;margin-top:4px" id="deck-count"></div>
     </div>
 
-    <!-- Spell supply -->
-    <div class="card">
+    <div class="card" style="flex:1;">
       <div class="card-title">法術供給區</div>
       <div id="spell-supply"></div>
     </div>
   </div>
-</div>
 
-<div style="grid-column: 1 / -1; text-align: center; padding: 12px 0 4px 0; margin-top: 8px; border-top: 1px dashed var(--border); color: var(--text3); font-size: 11px; letter-spacing: 0.05em;">
+  <div style="grid-area: footer; text-align: center; padding: 4px 0; color: var(--text3); font-size: 11px; letter-spacing: 0.05em;">
     © 2026 黑白馬工作室 (Heibaima Studio) · 遊戲設計：大俠
-  </div>
-  </div> <div id="tooltip">
-  <div class="tt-title" id="tt-title"></div>
-  <div id="tt-body"></div>
-</div>
-
-<!-- Modal -->
-<div id="modal-overlay">
-  <div id="modal-box">
-    <h2 id="modal-title"></h2>
-    <p id="modal-msg"></p>
-    <button class="btn btn-primary" onclick="modalAction()">重新開始</button>
   </div>
 </div>
 
 <!-- 2. 在 </body> 標籤前，新增「規則秘笈」的彈窗結構 -->
-<div id="help-modal-overlay" onclick="if(event.target===this) closeHelp()">
-  <div id="help-modal-box">
+<div id="help-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="help-modal-title" onclick="if(event.target===this) closeHelp()">
+  <div id="help-modal-box" tabindex="-1">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:10px;">
-      <h2 style="color:var(--gold); font-family:'Noto Serif TC', serif; font-size:18px;">📜 道DOU · 陣法秘笈</h2>
+      <h2 id="help-modal-title" style="color:var(--gold); font-family:'Noto Serif TC', serif; font-size:18px;">📜 道DOU · 陣法秘笈</h2>
       <button class="btn btn-ghost" onclick="closeHelp()" style="padding:4px 8px; font-size:12px;">✕</button>
     </div>
     <div id="help-content">
@@ -724,11 +795,34 @@ body {
     </div>
   </div>
 </div>
+
+  <!-- ── 必須放在 </script> 前面的彈窗與 Tooltip 結構 ── -->
+<div id="tooltip">
+  <div class="tt-title" id="tt-title"></div>
+  <div id="tt-body"></div>
+</div>
+
+<!-- Modal (勝負結算用) -->
+<div id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-msg">
+  <div id="modal-box" tabindex="-1">
+    <h2 id="modal-title"></h2>
+    <p id="modal-msg"></p>
+    <button class="btn btn-primary" onclick="modalAction()">重新開始</button>
+  </div>
+</div>
   
 <script>
+function openChart() {
+  const overlay = document.getElementById('chart-modal-overlay');
+  overlay.classList.add('show');
+  overlay.querySelector('#chart-modal-box').focus();
+}
+function closeChart() { document.getElementById('chart-modal-overlay').classList.remove('show'); }
   /* ── 規則秘笈操作 ── */
 function openHelp() {
-  document.getElementById('help-modal-overlay').classList.add('show');
+  const overlay = document.getElementById('help-modal-overlay');
+  overlay.classList.add('show');
+  document.getElementById('help-modal-box').focus();
 }
 
 function closeHelp() {
@@ -780,14 +874,15 @@ const SPELLS_DATA = {
   water_power:    {name:'玄冥之力', score:2, activation:'passive', manaCost:0, learnType:'refine',    learnCount:2, learnElems:['water'], effect:'每次完成連線中若有水屬性，額外+1分。'},
 };
 
-  function changeDifficulty() {
+function changeDifficulty() {
   const sel = document.getElementById('difficulty-select');
   G.difficulty = sel.value;
-  G.targetScore = WIN_SCORE[G.difficulty]; // 【新增】同步更新目標分數
+  G.targetScore = WIN_SCORE[G.difficulty];
   addLog(`⚙️ 遊戲難度已切換為：${sel.options[sel.selectedIndex].text}`, 'important');
-    // 更新右上角的 UI 顯示
-  document.getElementById('score-label').textContent = `分 / ${G.targetScore}`;
-  renderAll(); // 【新增】切換難度後立刻刷新畫面
+  if (G.score >= G.targetScore) {
+    triggerVictory();
+  }
+  renderAll();
 }
   
 /* ═══════════════════════════════════════════════════════════
@@ -834,6 +929,7 @@ function initGame() {
     purifyQueue: [], // 【新增】淨化佇列
     tribPending: null // 【新增】等待玩家承受天劫衝擊的狀態
   };
+  document.getElementById('log-area').replaceChildren();
   buildDecks();
   render();
   addLog('【初始佈局】請點擊陣盤，選擇任意屬性放置「本命珠」。', 'important');
@@ -865,21 +961,6 @@ function buildDecks() {
   G.pendingEffects = [];
 }
 
-function initialPlacement() {
-  const startElem = 0; // wood
-  addOrb(startElem, 3, 'normal');
-  G.lifeOrb = { elemIdx: startElem, layerIdx: 3 };
-  G.board[startElem][3].push({ type:'life', owner:'player' });
-  G.normalOrbs--;
-}
-
-function addOrb(elemIdx, layerIdx, type) {
-  if (type === 'normal') {
-    G.board[elemIdx][layerIdx].push({ type:'normal', owner:'player' });
-    if (type === 'normal') G.normalOrbs = Math.max(0, G.normalOrbs - 1);
-  }
-}
-
 function getOrbCount(elemIdx, layerIdx) { return G.board[elemIdx][layerIdx].length; }
 function canPlaceOrb(elemIdx, layerIdx) { return getOrbCount(elemIdx, layerIdx) < MAX_ORBS_PER_SLOT; }
 
@@ -889,7 +970,6 @@ function placeOrbCascade(elemIdx, type, owner) {
       const orb = { type, owner };
       G.board[elemIdx][li].push(orb);
       if (type === 'normal') G.normalOrbs = Math.max(0, G.normalOrbs - 1);
-      checkEntryForLayer(elemIdx, li);
       return li;
     }
   }
@@ -905,53 +985,6 @@ function placeOrbAtChaos(elemIdx) {
     return;
   }
   placeOrbCascade(elemIdx, 'normal', 'player');
-}
-
-function checkEntryForLayer(elemIdx, layerIdx) {}
-
-function moveOrbInward(elemIdx, layerIdx) {
-  const orbs = G.board[elemIdx][layerIdx];
-  if (orbs.length === 0) return null;
-  const orb = orbs.pop();
-  if (layerIdx === 0) {
-    handleOrbEntry(elemIdx, orb.type, orb.owner);
-    return 'entry';
-  }
-  const newLayer = layerIdx - 1;
-  if (getOrbCount(elemIdx, newLayer) < MAX_ORBS_PER_SLOT) {
-    G.board[elemIdx][newLayer].push(orb);
-  } else {
-    G.board[elemIdx][newLayer].push(orb);
-    while (getOrbCount(elemIdx, newLayer) > MAX_ORBS_PER_SLOT) {
-      const overflow = G.board[elemIdx][newLayer].pop();
-      if (newLayer === 0) { handleOrbEntry(elemIdx, overflow.type, overflow.owner); break; }
-    }
-  }
-  return newLayer;
-}
-
-function moveOrbOutward(elemIdx, layerIdx) {
-  const orbs = G.board[elemIdx][layerIdx];
-  const playerOrbs = orbs.filter(o => o.owner === 'player');
-  if (playerOrbs.length === 0) return null;
-  const idx = orbs.indexOf(playerOrbs[0]);
-  const orb = orbs.splice(idx, 1)[0];
-  if (layerIdx === 3) {
-    if (orb.type === 'normal') {
-      G.normalOrbs++;
-      G.mana = Math.min(G.maxMana, G.mana + 1);
-      addLog(`一般珠出界，獲得 +1 靈力`, 'good');
-    } else if (orb.type === 'life') {
-      G.lifeOrb = { elemIdx, layerIdx: 3 };
-      G.board[elemIdx][3].push(orb);
-      addLog(`本命珠彈回混沌層`, 'warn');
-    }
-    return 'exit';
-  }
-  const newLayer = layerIdx + 1;
-  G.board[elemIdx][newLayer].push(orb);
-  if (orb.type === 'life') G.lifeOrb = { elemIdx, layerIdx: newLayer };
-  return newLayer;
 }
 
 function handleOrbEntry(elemIdx, type, owner) {
@@ -1720,15 +1753,6 @@ function applyRefineryReward(eIdx, val) {
   }
 }
 
-function checkSpellLearn() {
-  G.spellSupply.forEach((spell, idx) => {
-    if (!spell) return;
-    if (canLearnSpell(spell)) {
-      addLog(`可習得法術：${spell.name}！（點擊法術牌學習）`, 'warn');
-    }
-  });
-}
-
 function canLearnSpell(spell) {
   if (spell.learnType === 'refine') {
     const count = spell.learnCount;
@@ -2079,12 +2103,6 @@ function onAltarClick(slotIdx) {
   renderAll();
 }
 
-function goToEndPhase() {
-  setPhase('end');
-  checkLineage();
-  renderAll();
-}
-
 function triggerVictory() {
   G.phase = 'gameover';
   showModal('渡劫飛升！', `恭喜！你以 ${G.score} 分完成了天劫修煉，逆天改運，修成正果！`);
@@ -2098,7 +2116,9 @@ function triggerDefeat() {
 function showModal(title, msg) {
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-msg').textContent = msg;
-  document.getElementById('modal-overlay').classList.add('show');
+  const overlay = document.getElementById('modal-overlay');
+  overlay.classList.add('show');
+  document.getElementById('modal-box').focus();
 }
 
 function modalAction() {
@@ -2130,10 +2150,13 @@ const NS  = 'http://www.w3.org/2000/svg';
 const BCX = 230, BCY = 210, N_ELEM = 5;
 const R_OUTER = 175;
 const BANDS = [40, 37, 34, 31];
-let radii = [R_OUTER];
-for (let b of BANDS) radii.push(radii[radii.length-1] - b);
+const radii = BANDS.reduce((values, band) => {
+  values.push(values[values.length - 1] - band);
+  return values;
+}, [R_OUTER]);
 const R_ENTRY = radii[4];
 const ORB_R   = 7.5;
+let lastBoardRenderKey = '';
 
 function elemAngle(ei) { return (Math.PI*2/N_ELEM)*ei - Math.PI/2; }
 function sectorPath(ei, rO, rI) {
@@ -2196,7 +2219,19 @@ function isOrbTargetable(ei, li, orb) {
   
 function renderBoard() {
   const svg = document.getElementById('boardSvg');
-  svg.innerHTML = '';
+  const boardRenderKey = JSON.stringify({
+    board: G.board,
+    purify: G.purifyQueue?.[0] || null,
+    tribPending: G.tribPending,
+    pendingEffects: G.pendingEffects,
+    selectedEffectIdx: G.selectedEffectIdx,
+    beastPending: G.beastPending ? { beast: G.beastPending.beast, step: G.beastPending.step } : null,
+    spellPending: G.spellPending ? { id: G.spellPending.id, count: G.spellPending.count } : null
+  });
+  if (boardRenderKey === lastBoardRenderKey) return;
+  lastBoardRenderKey = boardRenderKey;
+
+  const fragment = document.createDocumentFragment();
 
   // 【新增】0. 渲染虛空區 (最底層，用來捕捉向外的點擊)
   const voidBg = document.createElementNS(NS, 'circle');
@@ -2206,7 +2241,7 @@ function renderBoard() {
   voidBg.setAttribute('fill', 'transparent'); // 透明，純粹用來感應點擊
   voidBg.style.cursor = 'pointer';
   voidBg.addEventListener('click', (e) => { e.stopPropagation(); onSpecialZoneClick('void'); });
-  svg.appendChild(voidBg);
+  fragment.appendChild(voidBg);
   
   // 1. 渲染底圖扇形
   ELEM.forEach((elem, ei) => {
@@ -2220,7 +2255,7 @@ function renderBoard() {
       path.style.cursor = 'pointer';
       // 【修改點】扇形區域沒有實體珠子，所以第三個參數傳入 null
       path.addEventListener('click', (e) => { e.stopPropagation(); onBoardElemClick(ei, li, null); });
-      svg.appendChild(path);
+      fragment.appendChild(path);
     }
     
     const angle = elemAngle(ei);
@@ -2231,7 +2266,7 @@ function renderBoard() {
     t.setAttribute('text-anchor','middle'); t.setAttribute('dominant-baseline','middle');
     t.setAttribute('fill', ELEM_COLOR[elem]);
     t.setAttribute('font-size','17'); t.setAttribute('font-weight','700');
-    t.textContent = ELEM_CHAR[elem]; svg.appendChild(t);
+    t.textContent = ELEM_CHAR[elem]; fragment.appendChild(t);
   });
 
   // 2. 渲染層數文字
@@ -2244,7 +2279,7 @@ function renderBoard() {
     t.setAttribute('y', BCY+rMid*Math.sin(angle));
     t.setAttribute('text-anchor','middle'); t.setAttribute('dominant-baseline','middle');
     t.setAttribute('fill','#5A5855'); t.setAttribute('font-size','7');
-    t.textContent = LAYER_DISPLAY[band]; svg.appendChild(t);
+    t.textContent = LAYER_DISPLAY[band]; fragment.appendChild(t);
   }
 
   // 3. 渲染空位虛線框框
@@ -2263,7 +2298,7 @@ function renderBoard() {
         c.style.cursor='pointer';
         // 【修改點】點擊空位時，因為沒有珠子，所以傳入 null
         c.addEventListener('click', (e) => { e.stopPropagation(); onBoardElemClick(ei, li, null); });
-        svg.appendChild(c);
+        fragment.appendChild(c);
       });
     }
   });
@@ -2274,7 +2309,7 @@ function renderBoard() {
   cc.setAttribute('fill','#F0EDE8'); cc.setAttribute('stroke','#AAAAAA'); cc.setAttribute('stroke-width','1.2');
   cc.style.cursor = 'pointer'; 
   cc.addEventListener('click', (e) => { e.stopPropagation(); onSpecialZoneClick('entry'); }); 
-  svg.appendChild(cc);
+  fragment.appendChild(cc);
   
   const ct = document.createElementNS(NS,'text');
   ct.setAttribute('x',BCX); ct.setAttribute('y',BCY);
@@ -2283,7 +2318,7 @@ function renderBoard() {
   ct.textContent='入界區'; 
   ct.style.cursor = 'pointer'; 
   ct.addEventListener('click', (e) => { e.stopPropagation(); onSpecialZoneClick('entry'); }); 
-  svg.appendChild(ct);
+  fragment.appendChild(ct);
 
   // 5. 渲染實體珠子（玩家珠與劫珠）
   ELEM.forEach((elem, ei) => {
@@ -2343,7 +2378,7 @@ function renderBoard() {
         // ✅ 乾淨的點擊綁定，只綁定一次
         c.style.cursor='pointer';
         c.addEventListener('click', (e) => { e.stopPropagation(); onBoardElemClick(ei, li, orb); });
-        svg.appendChild(c);
+        fragment.appendChild(c);
         
         // ─── 【本命珠專屬圖騰與外圍全息環】 ───
         if (orb.type === 'life') {
@@ -2360,7 +2395,7 @@ function renderBoard() {
           
           lt.style.cursor='pointer';
           lt.addEventListener('click', (e) => { e.stopPropagation(); onBoardElemClick(ei, li, orb); });
-          svg.appendChild(lt);
+          fragment.appendChild(lt);
 
           const ring = document.createElementNS(NS,'circle');
           ring.setAttribute('cx',ox); 
@@ -2379,14 +2414,14 @@ function renderBoard() {
             ring.style.filter = 'drop-shadow(0 0 4px #FFF)';
           }
           
-          svg.appendChild(ring);
+          fragment.appendChild(ring);
         }
       });
     }
   });
-}
-function highlightSector(ei, on) {}
 
+  svg.replaceChildren(fragment);
+}
 /* ═══════════════════════════════════════════════════════════
    RENDERING — UI
 ═══════════════════════════════════════════════════════════ */
@@ -2757,11 +2792,12 @@ function renderTrib() {
   }
   track.innerHTML += `<span style="font-size:9px;color:var(--text3);margin-left:4px">${G.tribOrbs}/3</span>`;
 
-  const slot = document.getElementById('trib-card-slot');
-  // ─── 【新增】準備下一劫的極簡 HTML ───
+  // 分別抓取「常駐區」與「日誌區」
+  const summaryNode = document.getElementById('trib-summary');
+  const logsNode = document.getElementById('trib-logs');
+
   let nextTribHtml = '';
   if (G.tribDeck.length > 0) {
-// 【修改】：玩家花靈力窺探，或是「簡單難度」下，直接顯示屬性
     if (G.peekedNextTrib || G.difficulty === 'easy') {
       const nextElem = G.tribDeck[G.tribDeck.length - 1].elem; 
       const color = ELEM_COLOR[nextElem];
@@ -2779,36 +2815,40 @@ function renderTrib() {
     }
   }
 
-  // ─── 修改卡槽的渲染 ───
- if (!G.lastTribCard) {
-    slot.innerHTML = `
-      <span style="font-size:10px;color:var(--text3)">（天劫回合後顯示）</span>
-      ${nextTribHtml}
-    `;
-    slot.style.border = '1px dashed #7A2525';
+  if (!G.lastTribCard) {
+    summaryNode.innerHTML = `<span style="font-size:10px;color:var(--text3)">（天劫回合後顯示）</span>${nextTribHtml}`;
+    summaryNode.style.border = '1px dashed #7A2525';
+    logsNode.innerHTML = '尚無天劫紀錄';
   } else {
     const beast = BEASTS[G.lastTribCard.beast];
     const ec = ELEM_COLOR[G.lastTribCard.elem];
-    let logsHtml = (G.lastTribLogs || []).map(l => `<div style="margin-bottom:2px;">• ${l}</div>`).join('');
     
-    slot.style.border = `1px solid ${ec}`;
-    slot.innerHTML = `
-      <div style="font-size:10px; font-weight:bold; color:${ec}; margin-bottom: 4px;">最新降劫卡</div>
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom: 6px;">
-        <span style="font-size:22px;">${beast.icon}</span>
-        <span style="font-size:12px; color:${ec}; font-weight:bold;">${ELEM_CHAR[G.lastTribCard.elem]}屬 · ${beast.name}</span>
-      </div>
-      <div style="font-size:9px; color:var(--text2); width:100%; text-align:left; background:rgba(0,0,0,0.3); padding:4px 6px; border-radius:4px; line-height:1.3;">
-        ${logsHtml}
+    // 渲染常駐區 (屬性與圖示)
+    summaryNode.style.border = `1px solid ${ec}`;
+    summaryNode.innerHTML = `
+      <div style="font-size:10px; font-weight:bold; color:${ec}; margin-bottom: 4px;">當前天劫</div>
+      <div style="display:flex; justify-content:center; align-items:center; gap:6px;">
+        <span style="font-size:18px;">${beast.icon}</span>
+        <span style="font-size:12px; color:${ec}; font-weight:bold;">${ELEM_CHAR[G.lastTribCard.elem]}屬</span>
       </div>
       ${nextTribHtml}
     `;
+
+    // 渲染詳細推演區 (放入 details 中)
+    let logsHtml = (G.lastTribLogs || []).map(l => `<div style="margin-bottom:3px; padding-bottom:3px; border-bottom:1px dashed rgba(255,255,255,0.05);">• ${l}</div>`).join('');
+    logsNode.innerHTML = logsHtml;
   }
 }
   
+let lastScoreTrackKey = '';
+
 function renderScoreTrack() {
+  const scoreTrackKey = `${G.score}/${G.targetScore}`;
+  if (scoreTrackKey === lastScoreTrackKey) return;
+  lastScoreTrackKey = scoreTrackKey;
+
   const track = document.getElementById('score-track');
-  track.innerHTML = '';
+  track.replaceChildren();
   
   // 迴圈上限使用動態目標分數 G.targetScore
   for (let i = 0; i <= G.targetScore; i++) {
@@ -2843,6 +2883,7 @@ function renderScoreTrack() {
     track.appendChild(n);
   }
   document.getElementById('score-val').textContent = G.score;
+  document.getElementById('score-label').textContent = G.targetScore;
 }
 
 function renderPhaseIndicator() {
@@ -2942,6 +2983,13 @@ document.addEventListener('mousemove', e => {
   if (document.getElementById('tooltip').style.display === 'block') positionTooltip(e);
 });
 
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  closeHelp();
+  closeChart();
+  hideTooltip();
+});
+
 function render()    { renderAll(); }
 function renderAll() {
   renderBoard();
@@ -2981,10 +3029,38 @@ function isFormationMatch(altarElems, learnElems) {
 ═══════════════════════════════════════════════════════════ */
 initGame();
 </script>
+        <!-- 新增：五行生剋訣圖表彈窗 -->
+<div id="chart-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="chart-modal-title" onclick="if(event.target===this) closeChart()">
+  <div id="chart-modal-box" tabindex="-1">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:10px;">
+      <h2 id="chart-modal-title" style="color:var(--gold); font-family:'Noto Serif TC', serif; font-size:18px;">☯️ 五行生剋訣</h2>
+      <button class="btn btn-ghost" onclick="closeChart()" style="padding:4px 8px; font-size:12px;">✕</button>
+    </div>
+    <div style="display:flex; justify-content:center; align-items:center; padding: 10px 0;">
+      <!-- 這裡放入你原本的五行生剋 SVG 代碼，我稍微放大了比例 -->
+      <svg viewBox="0 0 120 115" style="width:100%; max-width:200px; overflow:visible;">
+        <defs>
+          <marker id="arrow-gen" viewBox="0 0 10 10" refX="24" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--gold)" opacity="0.8"/></marker>
+          <marker id="arrow-res" viewBox="0 0 10 10" refX="24" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--trib)" opacity="0.8"/></marker>
+        </defs>
+        <g fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-dasharray="3 2" style="opacity:0.6;" marker-end="url(#arrow-gen)">
+          <line x1="60" y1="10" x2="108" y2="45" /><line x1="108" y1="45" x2="89" y2="100" /><line x1="89" y1="100" x2="31" y2="100" /><line x1="31" y1="100" x2="12" y2="45" /><line x1="12" y1="45" x2="60" y2="10" />
+        </g>
+        <g fill="none" stroke="var(--trib)" stroke-width="1.5" style="opacity:0.7;" marker-end="url(#arrow-res)">
+          <line x1="60" y1="10" x2="89" y2="100" /><line x1="89" y1="100" x2="12" y2="45" /><line x1="12" y1="45" x2="108" y2="45" /><line x1="108" y1="45" x2="31" y2="100" /><line x1="31" y1="100" x2="60" y2="10" />
+        </g>
+        <circle cx="60" cy="10" r="11" fill="var(--bg)" stroke="var(--wood)" stroke-width="2"/><text x="60" y="11" fill="var(--wood)" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="middle">木</text>
+        <circle cx="108" cy="45" r="11" fill="var(--bg)" stroke="var(--fire)" stroke-width="2"/><text x="108" y="46" fill="var(--fire)" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="middle">火</text>
+        <circle cx="89" cy="100" r="11" fill="var(--bg)" stroke="var(--earth)" stroke-width="2"/><text x="89" y="101" fill="var(--earth)" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="middle">土</text>
+        <circle cx="31" cy="100" r="11" fill="var(--bg)" stroke="var(--metal)" stroke-width="2"/><text x="31" y="101" fill="var(--metal)" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="middle">金</text>
+        <circle cx="12" cy="45" r="11" fill="var(--bg)" stroke="var(--water)" stroke-width="2"/><text x="12" y="46" fill="var(--water)" font-size="11" font-weight="700" text-anchor="middle" dominant-baseline="middle">水</text>
+      </svg>
+    </div>
+    <div style="display:flex; justify-content:space-around; font-size:12px; color:var(--text2); margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+      <span style="display:flex; align-items:center; gap:6px;"><span style="color:var(--gold); letter-spacing:-2px;">- - -</span> 相生 (向內推)</span>
+      <span style="display:flex; align-items:center; gap:6px;"><span style="color:var(--trib); font-weight:bold;">──</span> 相剋 (向外退)</span>
+    </div>
+  </div>
+</div>
 </body>
 </html>
-
-
-
-
-
